@@ -33,7 +33,7 @@ export async function createMedicine(input) {
     input.notes || '',
     input.startDate || now.split('T')[0],
     input.endDate || null,
-    input.active === false ? false : true,
+    input.active === false ? 0 : 1,
     now,
     now
   );
@@ -167,7 +167,7 @@ export async function updateMedicine(id, input) {
     input.notes || '',
     input.startDate || null,
     input.endDate || null,
-    input.active === false ? false : true,
+    input.active === false ? 0 : 1,
     now,
     id
   );
