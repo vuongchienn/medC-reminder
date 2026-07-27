@@ -119,7 +119,14 @@ async function retryDueNotifications() {
     const response = await fetch('/api/push/retry-due', { method: 'POST' });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not retry notifications.');
-    showToast(result.delivered ? 'Reminder notification resent.' : 'No pending due reminder to resend.');
+    if (result.delivered) {
+      showToast('Reminder notification resent.');
+    } else if (!result.checked) {
+      showToast('No pending due reminder to resend.');
+    } else {
+      const detail = result.results?.[0] || {};
+      showToast(`Found ${result.checked} due reminder(s), but delivery failed: ${detail.reason || 'unknown'}. Subscriptions: ${detail.subscriptions ?? 0}.`, 'error');
+    }
   } catch (error) {
     console.error(error);
     showToast(error.message || 'Could not retry notifications.', 'error');

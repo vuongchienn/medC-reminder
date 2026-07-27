@@ -54,11 +54,13 @@ export async function sendReminderPush(reminder) {
   });
 
   let delivered = 0;
+  const failures = [];
   await Promise.all(subscriptions.map(async (row) => {
     try {
       await webpush.sendNotification(JSON.parse(row.subscription_json), payload);
       delivered += 1;
     } catch (error) {
+      failures.push(error.message);
       if (error.statusCode === 404 || error.statusCode === 410) {
         await db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(row.id);
       } else {
@@ -77,7 +79,8 @@ export async function sendReminderPush(reminder) {
     sent: delivered > 0,
     delivered,
     subscriptions: subscriptions.length,
-    reason: delivered ? undefined : 'no-delivery'
+    reason: delivered ? undefined : (subscriptions.length ? 'delivery-failed' : 'no-subscription'),
+    failure: failures[0]
   };
 }
 

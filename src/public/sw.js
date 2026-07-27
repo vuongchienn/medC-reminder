@@ -1,4 +1,4 @@
-const CACHE_NAME = 'medreminder-cache-v1';
+const CACHE_NAME = 'medreminder-cache-v2';
 const ASSETS = ['/', '/css/styles.css', '/js/app.js', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
