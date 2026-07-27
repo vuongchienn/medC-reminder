@@ -10,7 +10,7 @@ export function runMigrations() {
   if (isSqlite(db)) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS medicines (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
         dosage TEXT,
@@ -24,7 +24,7 @@ export function runMigrations() {
       );
 
       CREATE TABLE IF NOT EXISTS medicine_schedules (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY,
         medicine_id INTEGER NOT NULL,
         time_of_day TEXT NOT NULL,
         enabled INTEGER NOT NULL DEFAULT 1,
@@ -33,7 +33,7 @@ export function runMigrations() {
       );
 
       CREATE TABLE IF NOT EXISTS reminders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY,
         medicine_id INTEGER NOT NULL,
         scheduled_time TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
@@ -44,7 +44,7 @@ export function runMigrations() {
       );
 
       CREATE TABLE IF NOT EXISTS reminder_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY,
         medicine_id INTEGER NOT NULL,
         medicine_name TEXT NOT NULL,
         scheduled_time TEXT NOT NULL,
