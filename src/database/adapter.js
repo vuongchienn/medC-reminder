@@ -21,7 +21,32 @@ function getSqliteConnection() {
     fs.mkdirSync(dbDir, { recursive: true });
   }
 
-  return new DatabaseSync(absoluteDbPath);
+  const sqliteDb = new DatabaseSync(absoluteDbPath);
+  return {
+    type: 'sqlite',
+    connection: sqliteDb,
+    exec(sql) {
+      sqliteDb.exec(sql);
+    },
+    prepare(sql) {
+      const statement = sqliteDb.prepare(sql);
+      return {
+        run(...params) {
+          const result = statement.run(...params);
+          return { lastInsertRowid: result.lastInsertRowid, changes: result.changes };
+        },
+        get(...params) {
+          return statement.get(...params);
+        },
+        all(...params) {
+          return statement.all(...params);
+        }
+      };
+    },
+    async close() {
+      sqliteDb.close();
+    }
+  };
 }
 
 async function getMysqlConnection() {
@@ -35,7 +60,34 @@ async function getMysqlConnection() {
     connectionLimit: 10,
     queueLimit: 0
   });
-  return pool;
+
+  return {
+    type: 'mysql',
+    connection: pool,
+    async exec(sql) {
+      await pool.query(sql);
+    },
+    prepare(sql) {
+      const toPositional = (params) => params.map((_, index) => `?`).join(', ');
+      return {
+        async run(...params) {
+          const [result] = await pool.query(sql.replace(/\?/g, '?'), params);
+          return { lastInsertRowid: result.insertId ?? 0, changes: result.affectedRows ?? 0 };
+        },
+        async get(...params) {
+          const [rows] = await pool.query(sql.replace(/\?/g, '?'), params);
+          return rows[0] || null;
+        },
+        async all(...params) {
+          const [rows] = await pool.query(sql.replace(/\?/g, '?'), params);
+          return rows;
+        }
+      };
+    },
+    async close() {
+      await pool.end();
+    }
+  };
 }
 
 async function getPostgresConnection() {
@@ -43,7 +95,38 @@ async function getPostgresConnection() {
     connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
   });
-  return pool;
+
+  return {
+    type: 'postgres',
+    connection: pool,
+    async exec(sql) {
+      await pool.query(sql);
+    },
+    prepare(sql) {
+      const placeholderSql = sql.replace(/\?/g, (match, offset, full) => {
+        const count = full.slice(0, offset).split('?').length - 1;
+        return `$${count + 1}`;
+      });
+      return {
+        async run(...params) {
+          const result = await pool.query(placeholderSql, params);
+          const rowId = result.rows[0]?.id ?? null;
+          return { lastInsertRowid: rowId ?? 0, changes: result.rowCount ?? 0 };
+        },
+        async get(...params) {
+          const result = await pool.query(placeholderSql, params);
+          return result.rows[0] || null;
+        },
+        async all(...params) {
+          const result = await pool.query(placeholderSql, params);
+          return result.rows;
+        }
+      };
+    },
+    async close() {
+      await pool.end();
+    }
+  };
 }
 
 export async function initDatabase() {
@@ -68,14 +151,8 @@ export function getDb() {
   return connection;
 }
 
-export function closeDb() {
-  if (connection && dbType === 'sqlite') {
-    connection.close();
-  }
-  if (connection && dbType === 'mysql') {
-    connection.end();
-  }
-  if (connection && dbType === 'postgres') {
-    connection.end();
+export async function closeDb() {
+  if (connection) {
+    await connection.close();
   }
 }

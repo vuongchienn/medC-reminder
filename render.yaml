@@ -11,4 +11,6 @@ services:
       - key: PORT
         value: 10000
       - key: DB_TYPE
-        value: mysql
+        value: postgres
+      - key: DATABASE_URL
+        value: postgres://<user>:<password>@<host>:5432/<db>

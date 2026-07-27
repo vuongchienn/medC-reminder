@@ -58,6 +58,8 @@ DB_TYPE=postgres
 DATABASE_URL=postgresql://user:password@host:5432/db
 ```
 
+For Render, you can paste the same Supabase connection string into the DATABASE_URL environment variable.
+
 ## API overview
 - GET /api/medicines
 - POST /api/medicines
