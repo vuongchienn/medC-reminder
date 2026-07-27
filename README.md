@@ -36,6 +36,28 @@ MedReminder is a simple, mobile-first medication reminder web app built with Nod
    ```
 4. Open http://localhost:3000
 
+## Database options
+### Local development (default)
+- Use SQLite automatically with DB_TYPE=sqlite.
+
+### Render deployment (MySQL)
+Set these variables in Render:
+```env
+DB_TYPE=mysql
+MYSQL_HOST=...
+MYSQL_PORT=3306
+MYSQL_USER=...
+MYSQL_PASSWORD=...
+MYSQL_DATABASE=...
+```
+
+### Supabase deployment (PostgreSQL)
+Set these variables in your hosting environment:
+```env
+DB_TYPE=postgres
+DATABASE_URL=postgresql://user:password@host:5432/db
+```
+
 ## API overview
 - GET /api/medicines
 - POST /api/medicines
@@ -45,6 +67,18 @@ MedReminder is a simple, mobile-first medication reminder web app built with Nod
 - POST /api/reminders/:id/taken
 - POST /api/reminders/:id/snooze
 - GET /api/stats
+
+## Telegram notifications
+To receive reminders in Telegram, set these variables:
+```env
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
+```
+
+How to set it up:
+1. Create a bot with BotFather.
+2. Send `/start` to the bot and get the chat id via a bot like @userinfobot.
+3. Put the values into your environment variables.
 
 ## Notes
 - The SQLite database is created automatically in data/medremind.db.
