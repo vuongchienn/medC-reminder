@@ -21,7 +21,7 @@
         <div class="sidebar-footer">
           <label class="theme-picker" for="themeSelect">Màu giao diện</label>
           <select id="themeSelect" aria-label="Chọn màu giao diện">
-            <option value="indigo">Tím chàm</option><option value="emerald">Xanh ngọc</option><option value="rose">Hồng san hô</option>
+            <option value="indigo">Tím chàm</option><option value="violet">Tím violet</option><option value="blue">Xanh dương</option><option value="sky">Xanh da trời</option><option value="cyan">Xanh cyan</option><option value="emerald">Xanh ngọc</option><option value="green">Xanh lá</option><option value="lime">Xanh chanh</option><option value="amber">Vàng hổ phách</option><option value="orange">Cam</option><option value="rose">Hồng san hô</option><option value="red">Đỏ ruby</option>
           </select>
           <button id="themeToggle" class="ghost-btn">Chế độ tối</button>
         </div>
@@ -54,6 +54,9 @@
     </div>
 
     <dialog id="medicineDialog"><form method="dialog" id="medicineForm" class="dialog-form"><div class="section-title"><h3 id="medicineDialogTitle">Thêm thuốc</h3><button type="button" id="closeMedicineDialog" class="icon-btn" aria-label="Đóng">×</button></div><input type="hidden" name="id" /><label>Tên thuốc<input name="name" placeholder="Ví dụ: Paracetamol" required /></label><label>Mô tả<textarea name="description" placeholder="Mô tả ngắn"></textarea></label><div class="form-row"><label>Liều lượng<input name="dosage" placeholder="Ví dụ: 1" /></label><label>Đơn vị<input name="unit" placeholder="Ví dụ: viên" value="viên" /></label></div><label>Ghi chú<textarea name="notes" placeholder="Ghi chú"></textarea></label><div class="form-row"><label>Ngày bắt đầu<input name="startDate" type="date" /></label><label>Ngày kết thúc<input name="endDate" type="date" /></label></div><label>Giờ uống<input name="schedules" placeholder="Ví dụ: 08:00, 12:00" /></label><label class="checkbox-label"><input name="active" type="checkbox" checked /> Đang sử dụng</label><div class="dialog-actions"><button type="button" id="cancelMedicineDialog" class="ghost-btn">Hủy</button><button type="submit" class="primary-btn">Lưu</button></div></form></dialog>
+    <dialog id="medicineDetailsDialog"><div id="medicineDetails" class="medicine-details"></div></dialog>
+    <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true" hidden><div class="loading-panel"><span class="spinner"></span><span id="loadingMessage">Đang tải dữ liệu...</span></div></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="/js/app.js"></script>
   </body>
 </html>

@@ -5,6 +5,8 @@ const state = {
 const notifiedReminderIds = new Set();
 const pageTitles = { dashboard: 'Tổng quan', schedule: 'Lịch hôm nay', medicines: 'Thuốc', history: 'Lịch sử' };
 const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+let pendingLoads = 0;
+let toastTimer;
 
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 const scheduleText = (medicine) => (medicine.schedules || []).map((item) => item.timeOfDay).join(', ') || 'Chưa đặt giờ uống';
@@ -39,7 +41,32 @@ function updateLiveClock() {
   }).format(now);
 }
 
+function beginLoading(message = 'Đang tải dữ liệu...') {
+  pendingLoads += 1;
+  document.getElementById('loadingMessage').textContent = message;
+  document.getElementById('loadingOverlay').hidden = false;
+}
+
+function endLoading() {
+  pendingLoads = Math.max(0, pendingLoads - 1);
+  if (!pendingLoads) document.getElementById('loadingOverlay').hidden = true;
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = `toast ${type === 'error' ? 'error' : ''} visible`;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => toast.classList.remove('visible'), 3600);
+}
+
+async function requireSuccess(response) {
+  if (!response.ok) throw new Error('Không thể xử lý yêu cầu. Vui lòng thử lại.');
+  return response;
+}
+
 async function loadData() {
+  beginLoading();
   try {
     const [medicinesRes, remindersRes, historyRes, statsRes] = await Promise.all([
       fetch(`/api/medicines?search=${encodeURIComponent(state.filters.search)}&status=${state.filters.status}`).then((res) => res.json()),
@@ -56,6 +83,9 @@ async function loadData() {
     render();
   } catch (error) {
     console.error(error);
+    showToast('Không tải được dữ liệu. Vui lòng thử lại.', 'error');
+  } finally {
+    endLoading();
   }
 }
 
@@ -65,21 +95,26 @@ function render() {
   document.getElementById('todayTaken').textContent = state.reminders.filter((item) => item.status === 'taken').length;
   document.getElementById('adherenceRate').textContent = `${state.stats.adherenceRate ?? 0}%`;
   document.getElementById('missedCount').textContent = state.stats.missedCount ?? 0;
-  document.getElementById('todaySummary').textContent = upcoming.length ? `Hôm nay còn ${upcoming.length} liều cần uống` : 'Không còn liều nào cần uống hôm nay';
+  document.getElementById('todaySummary').innerHTML = upcoming.length
+    ? `Hôm nay còn <strong class="dose-count">${upcoming.length}</strong> liều cần uống`
+    : '<span class="all-done">✓ Đã hoàn thành tất cả liều hôm nay</span>';
 
   const streak = state.stats.streak ?? 0;
-  document.getElementById('streakBox').innerHTML = `<strong>Chuỗi ngày tuân thủ</strong><p>${streak} ngày</p>`;
+  const streakBox = document.getElementById('streakBox');
+  const streakLevel = streak >= 30 ? 3 : streak >= 14 ? 2 : streak >= 7 ? 1 : 0;
+  streakBox.className = `item-card streak-card streak-level-${streakLevel}`;
+  streakBox.innerHTML = `<span class="streak-flame">${streak >= 7 ? '🔥' : '✦'}</span><div><strong>Chuỗi ngày tuân thủ</strong><p><b>${streak}</b> ngày liên tiếp</p></div>`;
   const warningBox = document.getElementById('warningBox');
   warningBox.innerHTML = state.stats.warning ? `<strong>⚠ Nhắc nhở</strong><p>${escapeHtml(state.stats.warning)}</p>` : '<strong>Mọi thứ ổn</strong><p>Chưa có cảnh báo liều bị bỏ lỡ.</p>';
   warningBox.className = state.stats.warning ? 'item-card warning-card' : 'item-card';
 
   document.getElementById('reminderList').innerHTML = state.reminders.length
-    ? state.reminders.map((item) => `<div class="item-card reminder-card ${item.status === 'taken' ? 'is-taken' : ''}"><div><div class="badge">${escapeHtml(item.medicine_name)}</div><p class="reminder-time">${formatScheduledTime(item.scheduled_time)} <span>${item.status === 'taken' ? 'Đã uống' : 'Chờ uống'}</span></p></div><div class="dialog-actions">${item.status === 'taken' ? '<span class="taken-label">✓ Đã ghi nhận</span>' : `<button class="primary-btn" data-action="taken" data-id="${item.id}">Đã uống</button><button class="ghost-btn" data-action="snooze" data-id="${item.id}">Nhắc +10 phút</button>`}</div></div>`).join('')
+    ? state.reminders.map((item) => `<div class="item-card reminder-card ${item.status === 'taken' ? 'is-taken' : ''}" data-reminder-id="${item.id}" tabindex="0" role="button" aria-label="Xem chi tiết liều ${escapeHtml(item.medicine_name)} lúc ${formatScheduledTime(item.scheduled_time)}"><div><div class="badge">${escapeHtml(item.medicine_name)}</div><p class="reminder-time">${formatScheduledTime(item.scheduled_time)} <span class="${item.status === 'taken' ? 'taken-label' : 'pending-label'}">${item.status === 'taken' ? 'Đã uống' : 'Chờ uống'}</span></p><span class="details-hint">Bấm để xem chi tiết →</span></div><div class="dialog-actions">${item.status === 'taken' ? '<span class="taken-label">✓ Đã ghi nhận</span>' : `<button class="primary-btn" data-action="taken" data-id="${item.id}">Đã uống</button><button class="ghost-btn" data-action="snooze" data-id="${item.id}">Nhắc +10 phút</button>`}</div></div>`).join('')
     : '<p class="empty-state">Chưa có lịch uống thuốc cho hôm nay.</p>';
 
   renderMedicines();
   document.getElementById('historyList').innerHTML = state.history.length
-    ? state.history.slice(0, 12).map((entry) => `<div class="item-card"><strong>${escapeHtml(entry.medicine_name)}</strong><p>Giờ hẹn: ${formatScheduledTime(entry.scheduled_time, true)}</p><p>${entry.actual_taken_at ? `Đã uống: ${formatVietnamInstant(entry.actual_taken_at)}` : 'Chưa uống'}</p><p class="muted">${entry.status === 'taken' ? 'Đã uống' : 'Đang chờ'}</p></div>`).join('')
+    ? state.history.slice(0, 12).map((entry) => `<div class="item-card"><strong>${escapeHtml(entry.medicine_name)}</strong><p>Giờ hẹn: ${formatScheduledTime(entry.scheduled_time, true)}</p><p>${entry.actual_taken_at ? `Đã uống: ${formatVietnamInstant(entry.actual_taken_at)}` : 'Chưa uống'}</p><span class="history-status ${entry.status === 'taken' ? 'history-taken' : 'history-pending'}">${entry.status === 'taken' ? '✓ Đã uống' : '◷ Đang chờ'}</span></div>`).join('')
     : '<p class="empty-state">Chưa có lịch sử dùng thuốc.</p>';
   document.getElementById('forgottenList').innerHTML = (state.stats.topForgottenMedicines || []).slice(0, 4).map((item) => `<div class="item-card"><strong>${escapeHtml(item.name)}</strong><p>${item.count} liều bỏ lỡ</p></div>`).join('');
   maybeShowNotifications();
@@ -91,7 +126,7 @@ function renderMedicines() {
   const pageItems = state.medicines.slice(start, start + state.medicinesPerPage);
   document.getElementById('medicineCount').textContent = total ? `Hiển thị ${start + 1}–${Math.min(start + state.medicinesPerPage, total)} trên ${total} thuốc` : 'Chưa có thuốc nào';
   document.getElementById('medicineList').innerHTML = pageItems.length
-    ? pageItems.map((medicine) => `<article class="item-card medicine-card"><div class="medicine-card-head"><div><span class="badge ${medicine.active ? '' : 'paused-badge'}">${medicine.active ? 'Đang dùng' : 'Tạm dừng'}</span><h4>${escapeHtml(medicine.name)}</h4></div><div class="card-actions"><button class="text-btn" data-medicine-action="edit" data-id="${medicine.id}">Sửa</button><button class="text-btn danger-btn" data-medicine-action="delete" data-id="${medicine.id}">Xóa</button></div></div><p>${escapeHtml(medicine.description || 'Không có mô tả')}</p><p><strong>${escapeHtml(medicine.dosage || 'Chưa có liều lượng')} ${escapeHtml(medicine.unit || '')}</strong> · ${escapeHtml(scheduleText(medicine))}</p></article>`).join('')
+    ? pageItems.map((medicine) => `<article class="item-card medicine-card" data-medicine-id="${medicine.id}" tabindex="0" role="button" aria-label="Xem chi tiết ${escapeHtml(medicine.name)}"><div class="medicine-card-head"><div><span class="badge ${medicine.active ? '' : 'paused-badge'}">${medicine.active ? 'Đang dùng' : 'Tạm dừng'}</span><h4>${escapeHtml(medicine.name)}</h4></div><div class="card-actions"><button class="text-btn" data-medicine-action="edit" data-id="${medicine.id}">Sửa</button><button class="text-btn danger-btn" data-medicine-action="delete" data-id="${medicine.id}">Xóa</button></div></div><p>${escapeHtml(medicine.description || 'Không có mô tả')}</p><p><strong>${escapeHtml(medicine.dosage || 'Chưa có liều lượng')} ${escapeHtml(medicine.unit || '')}</strong> · ${escapeHtml(scheduleText(medicine))}</p><span class="details-hint">Bấm để xem đầy đủ thông tin →</span></article>`).join('')
     : '<p class="empty-state">Không tìm thấy thuốc phù hợp.</p>';
   renderPagination(total);
 }
@@ -114,8 +149,17 @@ function maybeShowNotifications() {
 }
 
 async function takeAction(id, action) {
-  await fetch(action === 'taken' ? `/api/reminders/${id}/taken` : `/api/reminders/${id}/snooze`, { method: 'POST' });
-  await loadData();
+  beginLoading(action === 'taken' ? 'Đang ghi nhận liều đã uống...' : 'Đang dời lịch nhắc 10 phút...');
+  try {
+    await requireSuccess(await fetch(action === 'taken' ? `/api/reminders/${id}/taken` : `/api/reminders/${id}/snooze`, { method: 'POST' }));
+    await loadData();
+    showToast(action === 'taken' ? 'Đã ghi nhận liều đã uống.' : 'Đã dời giờ nhắc thêm 10 phút.');
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || 'Không thể cập nhật liều thuốc.', 'error');
+  } finally {
+    endLoading();
+  }
 }
 
 function openView(view) {
@@ -144,17 +188,61 @@ function openMedicineDialog(medicine = null) {
   document.getElementById('medicineDialog').showModal();
 }
 
+function formatDateOnly(value) {
+  if (!value) return 'Không giới hạn';
+  const match = String(value).match(/(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value);
+}
+
+function openMedicineDetails(medicine, reminder = null) {
+  if (!medicine) return;
+  const doseStatus = reminder
+    ? `<div class="details-dose-status"><strong>Liều hôm nay</strong><p>${formatScheduledTime(reminder.scheduled_time, true)} <span class="${reminder.status === 'taken' ? 'taken-label' : 'pending-label'}">${reminder.status === 'taken' ? 'Đã uống' : 'Chờ uống'}</span></p>${reminder.actual_taken_at ? `<p>Ghi nhận lúc: ${formatVietnamInstant(reminder.actual_taken_at)}</p>` : ''}</div>`
+    : '';
+  document.getElementById('medicineDetails').innerHTML = `
+    <div class="section-title"><div><span class="badge ${medicine.active ? '' : 'paused-badge'}">${medicine.active ? 'Đang dùng' : 'Tạm dừng'}</span><h3>${escapeHtml(medicine.name)}</h3></div><button type="button" class="icon-btn" data-close-details aria-label="Đóng">×</button></div>
+    <p class="details-description">${escapeHtml(medicine.description || 'Chưa có mô tả cho thuốc này.')}</p>
+    ${doseStatus}
+    <dl class="details-grid">
+      <div><dt>Liều lượng</dt><dd>${escapeHtml(medicine.dosage || 'Chưa cập nhật')} ${escapeHtml(medicine.unit || '')}</dd></div>
+      <div><dt>Giờ uống</dt><dd>${escapeHtml(scheduleText(medicine))}</dd></div>
+      <div><dt>Bắt đầu</dt><dd>${formatDateOnly(medicine.start_date || medicine.startDate)}</dd></div>
+      <div><dt>Kết thúc</dt><dd>${formatDateOnly(medicine.end_date || medicine.endDate)}</dd></div>
+    </dl>
+    <div class="details-notes"><strong>Ghi chú</strong><p>${escapeHtml(medicine.notes || 'Không có ghi chú.')}</p></div>
+    <div class="dialog-actions"><button class="ghost-btn" data-close-details>Đóng</button><button class="primary-btn" data-medicine-action="edit" data-id="${medicine.id}">Chỉnh sửa</button></div>`;
+  document.getElementById('medicineDetailsDialog').showModal();
+}
+
 document.addEventListener('click', async (event) => {
+  if (event.target.closest('[data-close-details]')) { document.getElementById('medicineDetailsDialog').close(); return; }
   const actionButton = event.target.closest('button[data-action]');
   if (actionButton) { event.preventDefault(); await takeAction(actionButton.dataset.id, actionButton.dataset.action); return; }
   const medicineButton = event.target.closest('button[data-medicine-action]');
   if (medicineButton) {
     const medicine = state.medicines.find((item) => String(item.id) === medicineButton.dataset.id);
-    if (medicineButton.dataset.medicineAction === 'edit') openMedicineDialog(medicine);
+    if (medicineButton.dataset.medicineAction === 'edit') { const detailsDialog = document.getElementById('medicineDetailsDialog'); if (detailsDialog.open) detailsDialog.close(); openMedicineDialog(medicine); }
     if (medicineButton.dataset.medicineAction === 'delete' && medicine && window.confirm(`Xóa thuốc “${medicine.name}”?`)) {
-      await fetch(`/api/medicines/${medicine.id}`, { method: 'DELETE' });
-      await loadData();
+      beginLoading('Đang xóa thuốc...');
+      try {
+        await requireSuccess(await fetch(`/api/medicines/${medicine.id}`, { method: 'DELETE' }));
+        await loadData();
+        showToast('Đã xóa thuốc.');
+      } catch (error) {
+        console.error(error);
+        showToast(error.message || 'Không thể xóa thuốc.', 'error');
+      } finally {
+        endLoading();
+      }
     }
+    return;
+  }
+  const medicineCard = event.target.closest('.medicine-card[data-medicine-id]');
+  if (medicineCard) { openMedicineDetails(state.medicines.find((item) => String(item.id) === medicineCard.dataset.medicineId)); return; }
+  const reminderCard = event.target.closest('.reminder-card[data-reminder-id]');
+  if (reminderCard) {
+    const reminder = state.reminders.find((item) => String(item.id) === reminderCard.dataset.reminderId);
+    openMedicineDetails(state.medicines.find((item) => String(item.id) === String(reminder?.medicine_id)), reminder);
     return;
   }
   const pageButton = event.target.closest('button[data-page]');
@@ -176,21 +264,52 @@ document.getElementById('closeMedicineDialog').addEventListener('click', () => d
 document.getElementById('cancelMedicineDialog').addEventListener('click', () => document.getElementById('medicineDialog').close());
 document.getElementById('searchInput').addEventListener('input', (event) => { state.filters.search = event.target.value; state.medicinePage = 1; loadData(); });
 document.getElementById('statusFilter').addEventListener('change', (event) => { state.filters.status = event.target.value; state.medicinePage = 1; loadData(); });
+document.getElementById('medicineList').addEventListener('keydown', (event) => {
+  if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('button')) {
+    const card = event.target.closest('.medicine-card[data-medicine-id]');
+    if (card) { event.preventDefault(); openMedicineDetails(state.medicines.find((item) => String(item.id) === card.dataset.medicineId)); }
+  }
+});
+document.getElementById('reminderList').addEventListener('keydown', (event) => {
+  if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('button')) {
+    const card = event.target.closest('.reminder-card[data-reminder-id]');
+    if (card) {
+      event.preventDefault();
+      const reminder = state.reminders.find((item) => String(item.id) === card.dataset.reminderId);
+      openMedicineDetails(state.medicines.find((item) => String(item.id) === String(reminder?.medicine_id)), reminder);
+    }
+  }
+});
 
 document.getElementById('medicineForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = new FormData(event.target);
   const id = form.get('id');
   const payload = { name: form.get('name'), description: form.get('description'), dosage: form.get('dosage'), unit: form.get('unit'), notes: form.get('notes'), startDate: form.get('startDate'), endDate: form.get('endDate'), active: form.get('active') === 'on', schedules: form.get('schedules').split(',').map((time) => time.trim()).filter(Boolean).map((timeOfDay) => ({ timeOfDay })) };
-  await fetch(id ? `/api/medicines/${id}` : '/api/medicines', { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  document.getElementById('medicineDialog').close();
-  await loadData();
+  beginLoading(id ? 'Đang cập nhật thuốc...' : 'Đang thêm thuốc...');
+  try {
+    await requireSuccess(await fetch(id ? `/api/medicines/${id}` : '/api/medicines', { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }));
+    document.getElementById('medicineDialog').close();
+    await loadData();
+    showToast(id ? 'Đã cập nhật thuốc.' : 'Đã thêm thuốc.');
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || 'Không thể lưu thuốc.', 'error');
+  } finally {
+    endLoading();
+  }
 });
 
 document.getElementById('themeToggle').addEventListener('click', async () => {
   const html = document.documentElement; const nextTheme = html.dataset.theme === 'dark' ? 'light' : 'dark'; html.dataset.theme = nextTheme;
   document.getElementById('themeToggle').textContent = nextTheme === 'dark' ? 'Chế độ sáng' : 'Chế độ tối';
-  await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ darkMode: nextTheme === 'dark' }) });
+  try {
+    await requireSuccess(await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ darkMode: nextTheme === 'dark' }) }));
+    showToast('Đã đổi giao diện.');
+  } catch (error) {
+    html.dataset.theme = nextTheme === 'dark' ? 'light' : 'dark';
+    showToast('Không thể lưu giao diện.', 'error');
+  }
 });
 document.getElementById('themeSelect').addEventListener('change', (event) => {
   document.documentElement.dataset.accent = event.target.value;
