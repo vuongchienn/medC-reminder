@@ -199,16 +199,34 @@ export async function snoozeReminder(reminderId) {
     return null;
   }
 
-  const now = new Date(Date.now() + 10 * 60 * 1000);
-  const { dateKey, time: newTime } = vietnamDateParts(now);
+  // scheduled_time is a Vietnam wall-clock timestamp. PostgreSQL returns it as
+  // a Date, so use its ISO fields as wall-clock fields and add ten minutes there.
+  const original = new Date(reminder.scheduled_time);
+  if (Number.isNaN(original.getTime())) {
+    throw new Error('Invalid scheduled reminder time');
+  }
+  original.setUTCMinutes(original.getUTCMinutes() + 10);
+  const scheduledTime = original.toISOString().slice(0, 19).replace('T', ' ');
+  const now = new Date().toISOString();
 
-  const scheduledTime = `${dateKey} ${newTime}:00`;
+  await db.prepare(`
+    UPDATE reminders
+    SET scheduled_time = ?, updated_at = ?
+    WHERE id = ?
+  `).run(scheduledTime, now, reminderId);
 
-  const medicine = await db.prepare('SELECT id, name, dosage, unit FROM medicines WHERE id = ?').get(reminder.medicine_id);
-  const inserted = await createReminderIfMissing(medicine, scheduledTime);
+  await db.prepare(`
+    UPDATE reminder_history
+    SET scheduled_time = ?
+    WHERE id = (
+      SELECT id FROM reminder_history
+      WHERE medicine_id = ? AND scheduled_time = ?
+      ORDER BY id DESC LIMIT 1
+    )
+  `).run(scheduledTime, reminder.medicine_id, reminder.scheduled_time);
 
   return {
-    id: inserted?.id,
+    id: reminderId,
     scheduledTime
   };
 }
