@@ -69,3 +69,24 @@ export async function sendReminderPush(reminder) {
 
   return { sent: delivered > 0, delivered };
 }
+
+/** Send a user-triggered diagnostic notification without changing reminder state. */
+export async function sendTestPush() {
+  if (!configureWebPush()) return { sent: false, reason: 'not-configured', delivered: 0 };
+
+  const subscriptions = await db.prepare('SELECT id, subscription_json FROM push_subscriptions').all();
+  const payload = JSON.stringify({ title: 'MedReminder', body: 'Push test from server.', url: '/' });
+  let delivered = 0;
+  await Promise.all(subscriptions.map(async (row) => {
+    try {
+      await webpush.sendNotification(JSON.parse(row.subscription_json), payload);
+      delivered += 1;
+    } catch (error) {
+      console.error('Web Push test delivery failed:', error.message);
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        await db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(row.id);
+      }
+    }
+  }));
+  return { sent: delivered > 0, delivered, subscriptions: subscriptions.length };
+}

@@ -98,6 +98,21 @@ async function enablePushNotifications() {
   }
 }
 
+async function testPushNotification() {
+  beginLoading('Sending test notification...');
+  try {
+    const response = await fetch('/api/push/test', { method: 'POST' });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Server could not send test notification.');
+    showToast('Test notification sent. Check your iPhone.');
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || 'Could not send test notification.', 'error');
+  } finally {
+    endLoading();
+  }
+}
+
 async function loadData() {
   beginLoading();
   try {
@@ -354,6 +369,13 @@ document.getElementById('themeSelect').addEventListener('change', (event) => {
   localStorage.setItem('medreminder-accent', event.target.value);
 });
 document.getElementById('enablePushBtn').addEventListener('click', enablePushNotifications);
+const testPushButton = document.createElement('button');
+testPushButton.id = 'testPushBtn';
+testPushButton.className = 'ghost-btn';
+testPushButton.type = 'button';
+testPushButton.textContent = 'Gửi thử thông báo';
+testPushButton.addEventListener('click', testPushNotification);
+document.getElementById('enablePushBtn').insertAdjacentElement('afterend', testPushButton);
 document.getElementById('exportBtn').addEventListener('click', async () => downloadResponse('/api/export/csv', 'history.csv'));
 document.getElementById('backupBtn').addEventListener('click', async () => downloadResponse('/api/backup', 'medreminder-backup.json'));
 async function downloadResponse(endpoint, filename) { const response = await fetch(endpoint); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url); }

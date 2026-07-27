@@ -11,6 +11,8 @@ export function startScheduler() {
     try {
       const reminders = await getDueRemindersForNow();
 
+      console.log(`Reminder scheduler: ${reminders.length} pending due reminder(s).`);
+
       if (!reminders.length) {
         return;
       }
@@ -22,7 +24,8 @@ export function startScheduler() {
 
       // Push is sent by the server because an installed iPhone PWA may be
       // closed when the medicine is due.
-      await Promise.all(reminders.map((dueReminder) => sendReminderPush(dueReminder)));
+      const results = await Promise.all(reminders.map((dueReminder) => sendReminderPush(dueReminder)));
+      console.log('Reminder push results:', results);
 
       const message = `⏰ Đã đến giờ uống thuốc
 

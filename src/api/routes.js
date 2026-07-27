@@ -13,7 +13,7 @@ import {
   snoozeReminder
 } from '../services/reminderService.js';
 import { getDueRemindersForNow } from '../services/reminderService.js';
-import { getPublicKey, saveSubscription, sendReminderPush } from '../services/pushService.js';
+import { getPublicKey, saveSubscription, sendReminderPush, sendTestPush } from '../services/pushService.js';
 
 import { calculateStats } from '../services/statsService.js';
 import {
@@ -116,6 +116,18 @@ router.post('/api/push/subscribe', async (req, res) => {
     res.status(201).json({ success: true });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/api/push/test', async (req, res) => {
+  try {
+    const result = await sendTestPush();
+    console.log('Push test result:', result);
+    if (!result.sent) return res.status(503).json(result);
+    res.json(result);
+  } catch (error) {
+    console.error('Push test failed:', error.message);
+    res.status(500).json({ error: 'Unable to send test notification.' });
   }
 });
 
