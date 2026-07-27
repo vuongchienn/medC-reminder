@@ -180,8 +180,8 @@ function openMedicineDialog(medicine = null) {
   form.elements.dosage.value = medicine?.dosage || '';
   form.elements.unit.value = medicine?.unit || 'viên';
   form.elements.notes.value = medicine?.notes || '';
-  form.elements.startDate.value = medicine?.start_date || medicine?.startDate || '';
-  form.elements.endDate.value = medicine?.end_date || medicine?.endDate || '';
+  form.elements.startDate.value = dateInputValue(medicine?.start_date || medicine?.startDate);
+  form.elements.endDate.value = dateInputValue(medicine?.end_date || medicine?.endDate);
   form.elements.schedules.value = medicine ? scheduleText(medicine).replace('Chưa đặt giờ uống', '') : '';
   form.elements.active.checked = medicine ? Boolean(medicine.active) : true;
   document.getElementById('medicineDialogTitle').textContent = medicine ? 'Sửa thuốc' : 'Thêm thuốc';
@@ -192,6 +192,11 @@ function formatDateOnly(value) {
   if (!value) return 'Không giới hạn';
   const match = String(value).match(/(\d{4})-(\d{2})-(\d{2})/);
   return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value);
+}
+
+function dateInputValue(value) {
+  const match = String(value || '').match(/\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : '';
 }
 
 function openMedicineDetails(medicine, reminder = null) {
