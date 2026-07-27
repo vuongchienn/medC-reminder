@@ -85,7 +85,7 @@ export async function getMedicines(filters = {}) {
 
   if (filters.status) {
     query += ` AND m.active = ?`;
-    params.push(filters.status === 'active');
+    params.push(filters.status === 'active' ? 1 : 0);
   }
 
   query += `
