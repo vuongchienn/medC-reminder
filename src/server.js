@@ -33,7 +33,6 @@ app.get('/sw.js', (req, res) => {
 });
 
 runMigrations();
-seedSampleData();
 startScheduler();
 
 app.listen(port, () => {
