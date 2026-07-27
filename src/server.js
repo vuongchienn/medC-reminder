@@ -6,7 +6,6 @@ import dotenv from 'dotenv';
 import { runMigrations } from './database/migrations.js';
 import routes from './api/routes.js';
 import { startScheduler } from './scheduler/reminderScheduler.js';
-import { seedSampleData } from './seed.js';
 
 dotenv.config();
 
