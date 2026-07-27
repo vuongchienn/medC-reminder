@@ -80,6 +80,27 @@ How to set it up:
 2. Send `/start` to the bot and get the chat id via a bot like @userinfobot.
 3. Put the values into your environment variables.
 
+## Render deployment
+1. Push this repo to GitHub.
+2. Create a new Web Service on Render and connect the GitHub repository.
+3. Use the following settings:
+   - Build Command: npm install
+   - Start Command: npm start
+4. Add environment variables:
+   ```env
+   NODE_ENV=production
+   PORT=10000
+   DB_TYPE=mysql
+   MYSQL_HOST=...
+   MYSQL_PORT=3306
+   MYSQL_USER=...
+   MYSQL_PASSWORD=...
+   MYSQL_DATABASE=...
+   TELEGRAM_BOT_TOKEN=...
+   TELEGRAM_CHAT_ID=...
+   ```
+5. Deploy.
+
 ## Notes
 - The SQLite database is created automatically in data/medremind.db.
 - The scheduler checks reminders every minute.
