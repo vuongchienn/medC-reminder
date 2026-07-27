@@ -1,20 +1,24 @@
-import { generateRemindersForNow } from '../services/reminderService.js';
+import { getDueRemindersForNow } from '../services/reminderService.js';
 import { sendTelegramMessage } from '../services/telegramService.js';
 import { sendReminderPush } from '../services/pushService.js';
 
 /**
- * Poll every minute and create reminders when due.
+ * Poll due doses every minute. The calendar may have created the dose ahead
+ * of time, so creating a reminder is not used as the notification trigger.
  */
 export function startScheduler() {
-  setInterval(async () => {
+  const run = async () => {
     try {
-      const reminders = await generateRemindersForNow();
+      const reminders = await getDueRemindersForNow();
 
       if (!reminders.length) {
         return;
       }
 
       const reminder = reminders[0];
+      // Kept for the existing Telegram message template below.
+      reminder.medicineName = reminder.medicine_name;
+      reminder.scheduledTime = reminder.scheduled_time;
 
       // Push is sent by the server because an installed iPhone PWA may be
       // closed when the medicine is due.
@@ -31,5 +35,8 @@ Thời gian: ${reminder.scheduledTime}`;
     } catch (error) {
       console.error('Scheduler error:', error);
     }
-  }, 60 * 1000);
+  };
+
+  run();
+  setInterval(run, 60 * 1000);
 }
