@@ -33,7 +33,7 @@ export async function createMedicine(input) {
     input.notes || '',
     input.startDate || now.split('T')[0],
     input.endDate || null,
-    input.active === false ? 0 : 1,
+    input.active === false ? false : true,
     now,
     now
   );
@@ -83,10 +83,13 @@ export async function getMedicines(filters = {}) {
     params.push(`%${filters.search}%`);
   }
 
-  if (filters.status) {
-    query += ` AND m.active = ?`;
-    params.push(filters.status === 'active' ? 1 : 0);
-  }
+  if (filters.status === 'active') {
+query += ' AND m.active = TRUE';
+}
+
+    if (filters.status === 'paused') {
+    query += ' AND m.active = FALSE';
+    }
 
   query += `
     GROUP BY m.id
@@ -167,7 +170,7 @@ export async function updateMedicine(id, input) {
     input.notes || '',
     input.startDate || null,
     input.endDate || null,
-    input.active === false ? 0 : 1,
+    input.active === false ? false : true,
     now,
     id
   );
