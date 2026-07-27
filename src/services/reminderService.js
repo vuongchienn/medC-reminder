@@ -43,7 +43,7 @@ export async function generateRemindersForNow() {
         continue;
       }
 
-      const scheduledTime = `${dateKey}T${currentTime}`;
+      const scheduledTime = `${dateKey} ${currentTime}:00`;
 
       const existing = await db.prepare(`
         SELECT id
@@ -205,7 +205,7 @@ export async function snoozeReminder(reminderId) {
 
   const dateKey = now.toISOString().split('T')[0];
 
-  const scheduledTime = `${dateKey}T${newTime}`;
+  const scheduledTime = `${dateKey} ${newTime}:00`;
 
   const inserted = await db.prepare(`
     INSERT INTO reminders (
