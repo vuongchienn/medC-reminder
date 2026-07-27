@@ -4,7 +4,7 @@ const db = getDb();
 
 const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
-function vietnamDateParts(date = new Date()) {
+export function vietnamDateParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: VIETNAM_TIME_ZONE,
     year: 'numeric', month: '2-digit', day: '2-digit',
@@ -229,4 +229,19 @@ export async function snoozeReminder(reminderId) {
     id: reminderId,
     scheduledTime
   };
+}
+
+/** Pending doses that are now due in Vietnam time. Used by the free cron endpoint. */
+export async function getDueRemindersForNow() {
+  const { dateKey, time } = vietnamDateParts();
+  await ensureRemindersForDate(dateKey);
+  return db.prepare(`
+    SELECT r.*, m.name AS medicine_name, m.dosage, m.unit
+    FROM reminders r
+    JOIN medicines m ON m.id = r.medicine_id
+    WHERE r.status = 'pending'
+      AND r.scheduled_time >= ?
+      AND r.scheduled_time <= ?
+    ORDER BY r.scheduled_time ASC
+  `).all(`${dateKey} 00:00:00`, `${dateKey} ${time}:59`);
 }

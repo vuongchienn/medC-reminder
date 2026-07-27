@@ -65,6 +65,39 @@ async function requireSuccess(response) {
   return response;
 }
 
+function urlBase64ToUint8Array(value) {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = `${base64}${'='.repeat((4 - base64.length % 4) % 4)}`;
+  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+}
+
+async function enablePushNotifications() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    showToast('Thiết bị này chưa hỗ trợ nhắc thông báo nền.', 'error');
+    return;
+  }
+  beginLoading('Đang bật nhắc trên iPhone...');
+  try {
+    const keyResponse = await requireSuccess(await fetch('/api/push/public-key'));
+    const { publicKey } = await keyResponse.json();
+    const registration = await navigator.serviceWorker.ready;
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') throw new Error('Bạn chưa cho phép thông báo. Hãy chọn Cho phép khi iPhone hỏi.');
+    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+    await requireSuccess(await fetch('/api/push/subscribe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subscription)
+    }));
+    document.getElementById('enablePushBtn').textContent = '✓ Đã bật nhắc iPhone';
+    document.getElementById('enablePushBtn').disabled = true;
+    showToast('Đã bật nhắc thuốc trên iPhone.');
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || 'Không thể bật thông báo.', 'error');
+  } finally {
+    endLoading();
+  }
+}
+
 async function loadData() {
   beginLoading();
   try {
@@ -320,12 +353,14 @@ document.getElementById('themeSelect').addEventListener('change', (event) => {
   document.documentElement.dataset.accent = event.target.value;
   localStorage.setItem('medreminder-accent', event.target.value);
 });
+document.getElementById('enablePushBtn').addEventListener('click', enablePushNotifications);
 document.getElementById('exportBtn').addEventListener('click', async () => downloadResponse('/api/export/csv', 'history.csv'));
 document.getElementById('backupBtn').addEventListener('click', async () => downloadResponse('/api/backup', 'medreminder-backup.json'));
 async function downloadResponse(endpoint, filename) { const response = await fetch(endpoint); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url); }
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(console.error);
-if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+// iOS only permits this prompt after a direct tap in the Home Screen app.
+// enablePushNotifications() requests it from the "Bật nhắc" button instead.
 fetch('/api/settings').then((res) => res.json()).then((settings) => {
   document.documentElement.dataset.theme = settings.darkMode ? 'dark' : 'light';
   document.getElementById('themeToggle').textContent = settings.darkMode ? 'Chế độ sáng' : 'Chế độ tối';

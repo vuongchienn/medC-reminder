@@ -50,6 +50,19 @@ export async function runMigrations() {
       key VARCHAR(100) PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id SERIAL PRIMARY KEY,
+      endpoint TEXT NOT NULL UNIQUE,
+      subscription_json TEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL,
+      updated_at TIMESTAMP NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS reminder_notifications (
+      reminder_id INTEGER PRIMARY KEY REFERENCES reminders(id) ON DELETE CASCADE,
+      sent_at TIMESTAMP NOT NULL
+    );
   `);
 
   await db.exec(`

@@ -1,5 +1,21 @@
 # MedReminder
 
+## iPhone (iOS 17) push notifications
+
+The app supports background push notifications, including when the installed
+PWA is closed. To enable them:
+
+1. Run `npm run generate:vapid` once and save its three output values.
+2. Add `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY`, and `VAPID_PRIVATE_KEY` to the
+   Render environment, then redeploy. Do not replace these keys later or the
+   iPhone must subscribe again.
+3. On the iPhone use Safari **Share > Add to Home Screen**, open the app from
+   that new Home Screen icon, tap **Bật nhắc trên iPhone**, then select Allow.
+
+Render's free web service can sleep, so it cannot guarantee a medicine alert
+at the exact minute. Use an always-on Render service/worker for reliable
+reminders.
+
 MedReminder is a simple, mobile-first medication reminder web app built with Node.js, SQLite, Express, vanilla HTML/CSS/JavaScript, and a lightweight scheduler.
 
 ## Features

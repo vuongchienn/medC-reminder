@@ -12,6 +12,8 @@ import {
   markReminderTaken,
   snoozeReminder
 } from '../services/reminderService.js';
+import { getDueRemindersForNow } from '../services/reminderService.js';
+import { getPublicKey, saveSubscription, sendReminderPush } from '../services/pushService.js';
 
 import { calculateStats } from '../services/statsService.js';
 import {
@@ -100,6 +102,31 @@ router.post('/api/reminders/:id/snooze', async (req, res) => {
   }
 
   res.json(result);
+});
+
+router.get('/api/push/public-key', (req, res) => {
+  const publicKey = getPublicKey();
+  if (!publicKey) return res.status(503).json({ error: 'Web Push chưa được cấu hình.' });
+  res.json({ publicKey });
+});
+
+router.post('/api/push/subscribe', async (req, res) => {
+  try {
+    await saveSubscription(req.body);
+    res.status(201).json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Called once per minute by a free external cron monitor. Keep the secret out of URLs shared publicly.
+router.post('/api/jobs/process-reminders', async (req, res) => {
+  if (!process.env.CRON_SECRET || req.get('x-cron-secret') !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const reminders = await getDueRemindersForNow();
+  const results = await Promise.all(reminders.map(sendReminderPush));
+  res.json({ checked: reminders.length, delivered: results.reduce((total, item) => total + (item.delivered || 0), 0) });
 });
 
 router.get('/api/stats', async (req, res) => {
