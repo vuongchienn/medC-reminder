@@ -104,7 +104,12 @@ router.post('/api/reminders/:id/snooze', async (req, res) => {
 
 router.get('/api/stats', async (req, res) => {
   const history = await db.prepare(`
-    SELECT *
+    SELECT
+      medicine_name,
+      status,
+      created_at,
+      actual_taken_at,
+      scheduled_time
     FROM reminder_history
     ORDER BY created_at DESC
   `).all();
