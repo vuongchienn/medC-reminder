@@ -113,6 +113,21 @@ async function testPushNotification() {
   }
 }
 
+async function retryDueNotifications() {
+  beginLoading('Retrying due medicine notifications...');
+  try {
+    const response = await fetch('/api/push/retry-due', { method: 'POST' });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not retry notifications.');
+    showToast(result.delivered ? 'Reminder notification resent.' : 'No pending due reminder to resend.');
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || 'Could not retry notifications.', 'error');
+  } finally {
+    endLoading();
+  }
+}
+
 async function loadData() {
   beginLoading();
   try {
@@ -376,6 +391,12 @@ testPushButton.type = 'button';
 testPushButton.textContent = 'Gửi thử thông báo';
 testPushButton.addEventListener('click', testPushNotification);
 document.getElementById('enablePushBtn').insertAdjacentElement('afterend', testPushButton);
+const retryDueButton = document.createElement('button');
+retryDueButton.className = 'ghost-btn';
+retryDueButton.type = 'button';
+retryDueButton.textContent = 'Gửi lại liều đến hạn';
+retryDueButton.addEventListener('click', retryDueNotifications);
+testPushButton.insertAdjacentElement('afterend', retryDueButton);
 document.getElementById('exportBtn').addEventListener('click', async () => downloadResponse('/api/export/csv', 'history.csv'));
 document.getElementById('backupBtn').addEventListener('click', async () => downloadResponse('/api/backup', 'medreminder-backup.json'));
 async function downloadResponse(endpoint, filename) { const response = await fetch(endpoint); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url); }
