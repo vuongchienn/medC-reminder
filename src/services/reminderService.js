@@ -6,12 +6,21 @@ const db = getDb();
  * Create reminders for the current minute based on active medicines and schedules.
  */
 export async function generateRemindersForNow() {
-  const now = new Date();
+    
+  const vnNow = new Date(
+  new Date().toLocaleString('en-US', {
+        timeZone: 'Asia/Ho_Chi_Minh'
+    })
+    );
+console.log(
+  'Scheduler Time:',
+  new Date().toString()
+);
+    const currentTime =
+    `${String(vnNow.getHours()).padStart(2, '0')}:${String(vnNow.getMinutes()).padStart(2, '0')}`;
 
-  const currentTime =
-    `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-  const dateKey = now.toISOString().split('T')[0];
+    const dateKey =
+    `${vnNow.getFullYear()}-${String(vnNow.getMonth() + 1).padStart(2, '0')}-${String(vnNow.getDate()).padStart(2, '0')}`;
 
   const activeMedicines = await db.prepare(`
     SELECT
