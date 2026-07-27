@@ -18,7 +18,13 @@
           <button class="nav-link" data-view="medicines">Thuốc</button>
           <button class="nav-link" data-view="history">Lịch sử</button>
         </nav>
-        <div class="sidebar-footer"><button id="themeToggle" class="ghost-btn">Đổi giao diện</button></div>
+        <div class="sidebar-footer">
+          <label class="theme-picker" for="themeSelect">Màu giao diện</label>
+          <select id="themeSelect" aria-label="Chọn màu giao diện">
+            <option value="indigo">Tím chàm</option><option value="emerald">Xanh ngọc</option><option value="rose">Hồng san hô</option>
+          </select>
+          <button id="themeToggle" class="ghost-btn">Chế độ tối</button>
+        </div>
       </aside>
       <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
 
@@ -28,7 +34,7 @@
             <button id="menuToggle" class="menu-toggle" aria-label="Mở menu" aria-expanded="false"><span></span><span></span><span></span></button>
             <div><p class="eyebrow">Medication Reminder</p><h1 id="pageTitle">Tổng quan</h1></div>
           </div>
-          <button id="addMedicineBtn" class="primary-btn">+ Thêm thuốc</button>
+          <div class="topbar-actions"><div class="live-clock" aria-live="polite"><strong id="liveTime">--:--:--</strong><span id="liveDate">--</span></div><button id="addMedicineBtn" class="primary-btn">+ Thêm thuốc</button></div>
         </header>
 
         <main class="content">
@@ -43,6 +49,7 @@
 
           <section id="history" class="view-section"><section class="card"><div class="section-title"><h2>Lịch sử</h2><button id="exportBtn" class="ghost-btn">Xuất CSV</button></div><div id="historyList" class="stack"></div></section></section>
         </main>
+        <footer class="site-footer"><span>MedReminder</span><span>Chăm sóc sức khỏe, đúng giờ mỗi ngày.</span></footer>
       </div>
     </div>
 

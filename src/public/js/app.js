@@ -4,9 +4,40 @@ const state = {
 };
 const notifiedReminderIds = new Set();
 const pageTitles = { dashboard: 'Tổng quan', schedule: 'Lịch hôm nay', medicines: 'Thuốc', history: 'Lịch sử' };
+const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 const scheduleText = (medicine) => (medicine.schedules || []).map((item) => item.timeOfDay).join(', ') || 'Chưa đặt giờ uống';
+
+// Scheduled times are stored as Vietnam wall-clock values. Do not let the browser
+// reinterpret PostgreSQL's ISO serialisation as UTC.
+function formatScheduledTime(value, withDate = false) {
+  if (!value) return '—';
+  const match = String(value).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!match) return String(value);
+  const [, year, month, day, hour, minute] = match;
+  return withDate ? `${day}/${month}/${year} · ${hour}:${minute}` : `${hour}:${minute}`;
+}
+
+function formatVietnamInstant(value) {
+  if (!value) return 'Chưa uống';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: VIETNAM_TIME_ZONE, day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  }).format(date).replace(', ', ' · ');
+}
+
+function updateLiveClock() {
+  const now = new Date();
+  document.getElementById('liveTime').textContent = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: VIETNAM_TIME_ZONE, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  }).format(now);
+  document.getElementById('liveDate').textContent = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: VIETNAM_TIME_ZONE, weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric'
+  }).format(now);
+}
 
 async function loadData() {
   try {
@@ -42,13 +73,13 @@ function render() {
   warningBox.innerHTML = state.stats.warning ? `<strong>⚠ Nhắc nhở</strong><p>${escapeHtml(state.stats.warning)}</p>` : '<strong>Mọi thứ ổn</strong><p>Chưa có cảnh báo liều bị bỏ lỡ.</p>';
   warningBox.className = state.stats.warning ? 'item-card warning-card' : 'item-card';
 
-  document.getElementById('reminderList').innerHTML = upcoming.length
-    ? upcoming.map((item) => `<div class="item-card reminder-card"><div><div class="badge">${escapeHtml(item.medicine_name)}</div><p>${escapeHtml(item.scheduled_time)}</p></div><div class="dialog-actions"><button class="primary-btn" data-action="taken" data-id="${item.id}">Đã uống</button><button class="ghost-btn" data-action="snooze" data-id="${item.id}">Nhắc +10 phút</button></div></div>`).join('')
-    : '<p class="empty-state">Không có lịch uống nào cần xử lý.</p>';
+  document.getElementById('reminderList').innerHTML = state.reminders.length
+    ? state.reminders.map((item) => `<div class="item-card reminder-card ${item.status === 'taken' ? 'is-taken' : ''}"><div><div class="badge">${escapeHtml(item.medicine_name)}</div><p class="reminder-time">${formatScheduledTime(item.scheduled_time)} <span>${item.status === 'taken' ? 'Đã uống' : 'Chờ uống'}</span></p></div><div class="dialog-actions">${item.status === 'taken' ? '<span class="taken-label">✓ Đã ghi nhận</span>' : `<button class="primary-btn" data-action="taken" data-id="${item.id}">Đã uống</button><button class="ghost-btn" data-action="snooze" data-id="${item.id}">Nhắc +10 phút</button>`}</div></div>`).join('')
+    : '<p class="empty-state">Chưa có lịch uống thuốc cho hôm nay.</p>';
 
   renderMedicines();
   document.getElementById('historyList').innerHTML = state.history.length
-    ? state.history.slice(0, 12).map((entry) => `<div class="item-card"><strong>${escapeHtml(entry.medicine_name)}</strong><p>${escapeHtml(entry.scheduled_time)} → ${escapeHtml(entry.actual_taken_at || 'Chưa uống')}</p><p class="muted">${escapeHtml(entry.status)}</p></div>`).join('')
+    ? state.history.slice(0, 12).map((entry) => `<div class="item-card"><strong>${escapeHtml(entry.medicine_name)}</strong><p>Giờ hẹn: ${formatScheduledTime(entry.scheduled_time, true)}</p><p>${entry.actual_taken_at ? `Đã uống: ${formatVietnamInstant(entry.actual_taken_at)}` : 'Chưa uống'}</p><p class="muted">${entry.status === 'taken' ? 'Đã uống' : 'Đang chờ'}</p></div>`).join('')
     : '<p class="empty-state">Chưa có lịch sử dùng thuốc.</p>';
   document.getElementById('forgottenList').innerHTML = (state.stats.topForgottenMedicines || []).slice(0, 4).map((item) => `<div class="item-card"><strong>${escapeHtml(item.name)}</strong><p>${item.count} liều bỏ lỡ</p></div>`).join('');
   maybeShowNotifications();
@@ -158,7 +189,12 @@ document.getElementById('medicineForm').addEventListener('submit', async (event)
 
 document.getElementById('themeToggle').addEventListener('click', async () => {
   const html = document.documentElement; const nextTheme = html.dataset.theme === 'dark' ? 'light' : 'dark'; html.dataset.theme = nextTheme;
+  document.getElementById('themeToggle').textContent = nextTheme === 'dark' ? 'Chế độ sáng' : 'Chế độ tối';
   await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ darkMode: nextTheme === 'dark' }) });
+});
+document.getElementById('themeSelect').addEventListener('change', (event) => {
+  document.documentElement.dataset.accent = event.target.value;
+  localStorage.setItem('medreminder-accent', event.target.value);
 });
 document.getElementById('exportBtn').addEventListener('click', async () => downloadResponse('/api/export/csv', 'history.csv'));
 document.getElementById('backupBtn').addEventListener('click', async () => downloadResponse('/api/backup', 'medreminder-backup.json'));
@@ -166,5 +202,13 @@ async function downloadResponse(endpoint, filename) { const response = await fet
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(console.error);
 if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
-fetch('/api/settings').then((res) => res.json()).then((settings) => { document.documentElement.dataset.theme = settings.darkMode ? 'dark' : 'light'; }).catch(console.error);
+fetch('/api/settings').then((res) => res.json()).then((settings) => {
+  document.documentElement.dataset.theme = settings.darkMode ? 'dark' : 'light';
+  document.getElementById('themeToggle').textContent = settings.darkMode ? 'Chế độ sáng' : 'Chế độ tối';
+}).catch(console.error);
+const savedAccent = localStorage.getItem('medreminder-accent') || 'indigo';
+document.documentElement.dataset.accent = savedAccent;
+document.getElementById('themeSelect').value = savedAccent;
+updateLiveClock();
+setInterval(updateLiveClock, 1000);
 loadData();

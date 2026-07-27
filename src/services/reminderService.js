@@ -2,37 +2,80 @@ import { getDb } from '../database/db.js';
 
 const db = getDb();
 
-/**
- * Create reminders for the current minute based on active medicines and schedules.
- */
-export async function generateRemindersForNow() {
-    
-  const vnNow = new Date(
-  new Date().toLocaleString('en-US', {
-        timeZone: 'Asia/Ho_Chi_Minh'
-    })
-    );
-console.log(
-  'Scheduler Time:',
-  new Date().toString()
-);
-    const currentTime =
-    `${String(vnNow.getHours()).padStart(2, '0')}:${String(vnNow.getMinutes()).padStart(2, '0')}`;
+const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
-    const dateKey =
-    `${vnNow.getFullYear()}-${String(vnNow.getMonth() + 1).padStart(2, '0')}-${String(vnNow.getDate()).padStart(2, '0')}`;
+function vietnamDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  }).formatToParts(date).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
 
-  const activeMedicines = await db.prepare(`
-    SELECT
-      m.id,
-      m.name,
-      m.dosage,
-      m.unit
+  return {
+    dateKey: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour}:${parts.minute}`
+  };
+}
+
+async function createReminderIfMissing(medicine, scheduledTime) {
+  const existing = await db.prepare(`
+    SELECT id FROM reminders
+    WHERE medicine_id = ? AND scheduled_time = ?
+    LIMIT 1
+  `).get(medicine.id, scheduledTime);
+  if (existing) return null;
+
+  const now = new Date().toISOString();
+  const inserted = await db.prepare(`
+    INSERT INTO reminders (medicine_id, scheduled_time, status, created_at, updated_at)
+    VALUES (?, ?, 'pending', ?, ?)
+    RETURNING id
+  `).get(medicine.id, scheduledTime, now, now);
+
+  await db.prepare(`
+    INSERT INTO reminder_history (medicine_id, medicine_name, scheduled_time, actual_taken_at, status, created_at)
+    VALUES (?, ?, ?, NULL, 'pending', ?)
+  `).run(medicine.id, medicine.name, scheduledTime, now);
+
+  return {
+    id: inserted.id, medicineId: medicine.id, medicineName: medicine.name,
+    dosage: medicine.dosage, unit: medicine.unit, scheduledTime
+  };
+}
+
+async function getActiveMedicinesForDate(dateKey) {
+  return db.prepare(`
+    SELECT m.id, m.name, m.dosage, m.unit
     FROM medicines m
     WHERE m.active = TRUE
       AND (m.end_date IS NULL OR m.end_date >= ?)
       AND m.start_date <= ?
   `).all(dateKey, dateKey);
+}
+
+/** Ensure every active dose for a Vietnam calendar day exists before it is due. */
+export async function ensureRemindersForDate(dateKey) {
+  const medicines = await getActiveMedicinesForDate(dateKey);
+  const created = [];
+  for (const medicine of medicines) {
+    const schedules = await db.prepare(`
+      SELECT time_of_day FROM medicine_schedules
+      WHERE medicine_id = ? AND enabled = TRUE
+    `).all(medicine.id);
+    for (const schedule of schedules) {
+      const reminder = await createReminderIfMissing(medicine, `${dateKey} ${schedule.time_of_day}:00`);
+      if (reminder) created.push(reminder);
+    }
+  }
+  return created;
+}
+
+/**
+ * Create reminders for the current minute based on active medicines and schedules.
+ */
+export async function generateRemindersForNow() {
+  const { dateKey, time: currentTime } = vietnamDateParts();
+  const activeMedicines = await getActiveMedicinesForDate(dateKey);
 
   const reminders = [];
 
@@ -52,50 +95,8 @@ console.log(
         continue;
       }
 
-      const scheduledTime = `${dateKey} ${currentTime}:00`;
-
-      const existing = await db.prepare(`
-        SELECT id
-        FROM reminders
-        WHERE medicine_id = ?
-          AND scheduled_time = ?
-          AND status = 'pending'
-        ORDER BY created_at DESC
-        LIMIT 1
-      `).get(
-        medicine.id,
-        scheduledTime
-      );
-
-      if (existing) {
-        continue;
-      }
-
-      const inserted = await db.prepare(`
-        INSERT INTO reminders (
-          medicine_id,
-          scheduled_time,
-          status,
-          created_at,
-          updated_at
-        )
-        VALUES (?, ?, 'pending', ?, ?)
-        RETURNING id
-      `).get(
-        medicine.id,
-        scheduledTime,
-        new Date().toISOString(),
-        new Date().toISOString()
-      );
-
-      reminders.push({
-        id: inserted.id,
-        medicineId: medicine.id,
-        medicineName: medicine.name,
-        dosage: medicine.dosage,
-        unit: medicine.unit,
-        scheduledTime
-      });
+      const reminder = await createReminderIfMissing(medicine, `${dateKey} ${currentTime}:00`);
+      if (reminder) reminders.push(reminder);
     }
   }
 
@@ -106,6 +107,9 @@ console.log(
  * List reminders.
  */
 export async function getReminders(filters = {}) {
+  if (!filters.all) {
+    await ensureRemindersForDate(vietnamDateParts().dateKey);
+  }
   let query = `
     SELECT
       r.*,
@@ -125,9 +129,13 @@ export async function getReminders(filters = {}) {
     params.push(filters.status);
   }
 
-  query += `
-    ORDER BY r.scheduled_time DESC
-  `;
+  if (!filters.all) {
+    const { dateKey } = vietnamDateParts();
+    query += ` AND r.scheduled_time >= ? AND r.scheduled_time < ?`;
+    params.push(`${dateKey} 00:00:00`, `${dateKey} 23:59:59.999`);
+  }
+
+  query += ` ORDER BY r.scheduled_time ASC`;
 
   return await db.prepare(query).all(...params);
 }
@@ -161,29 +169,15 @@ export async function markReminderTaken(reminderId) {
     reminderId
   );
 
-  const medicine = await db.prepare(`
-    SELECT name
-    FROM medicines
-    WHERE id = ?
-  `).get(reminder.medicine_id);
-
   await db.prepare(`
-    INSERT INTO reminder_history (
-      medicine_id,
-      medicine_name,
-      scheduled_time,
-      actual_taken_at,
-      status,
-      created_at
+    UPDATE reminder_history
+    SET actual_taken_at = ?, status = 'taken'
+    WHERE id = (
+      SELECT id FROM reminder_history
+      WHERE medicine_id = ? AND scheduled_time = ?
+      ORDER BY id DESC LIMIT 1
     )
-    VALUES (?, ?, ?, ?, 'taken', ?)
-  `).run(
-    reminder.medicine_id,
-    medicine?.name || 'Unknown',
-    reminder.scheduled_time,
-    now,
-    now
-  );
+  `).run(now, reminder.medicine_id, reminder.scheduled_time);
 
   return {
     id: reminderId,
@@ -205,36 +199,16 @@ export async function snoozeReminder(reminderId) {
     return null;
   }
 
-  const now = new Date();
-
-  now.setMinutes(now.getMinutes() + 10);
-
-  const newTime =
-    `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-  const dateKey = now.toISOString().split('T')[0];
+  const now = new Date(Date.now() + 10 * 60 * 1000);
+  const { dateKey, time: newTime } = vietnamDateParts(now);
 
   const scheduledTime = `${dateKey} ${newTime}:00`;
 
-  const inserted = await db.prepare(`
-    INSERT INTO reminders (
-      medicine_id,
-      scheduled_time,
-      status,
-      created_at,
-      updated_at
-    )
-    VALUES (?, ?, 'pending', ?, ?)
-    RETURNING id
-  `).get(
-    reminder.medicine_id,
-    scheduledTime,
-    now.toISOString(),
-    now.toISOString()
-  );
+  const medicine = await db.prepare('SELECT id, name, dosage, unit FROM medicines WHERE id = ?').get(reminder.medicine_id);
+  const inserted = await createReminderIfMissing(medicine, scheduledTime);
 
   return {
-    id: inserted.id,
+    id: inserted?.id,
     scheduledTime
   };
 }
