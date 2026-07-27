@@ -1,0 +1,17 @@
+{
+  "name": "med-render",
+  "version": "1.0.0",
+  "description": "Medication reminder web app with SQLite, REST API, scheduler, and PWA support",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.21.2"
+  }
+}

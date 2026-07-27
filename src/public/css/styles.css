@@ -1,0 +1,51 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f7fb;
+  --card: #ffffff;
+  --text: #111827;
+  --muted: #6b7280;
+  --primary: #4f46e5;
+  --accent: #22c55e;
+  --border: #e5e7eb;
+}
+
+:root[data-theme='dark'] {
+  --bg: #111827;
+  --card: #1f2937;
+  --text: #f9fafb;
+  --muted: #9ca3af;
+  --primary: #818cf8;
+  --accent: #34d399;
+  --border: #374151;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+.app-shell { max-width: 920px; margin: 0 auto; padding: 16px 16px 48px; }
+.topbar, .section-title { display: flex; justify-content: space-between; align-items: center; }
+.topbar { margin-bottom: 16px; }
+.eyebrow { text-transform: uppercase; letter-spacing: .24em; color: var(--primary); font-size: .75rem; margin: 0 0 4px; }
+h1, h2, h3, p { margin: 0; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: 0 8px 24px rgba(15, 23, 42, .06); }
+.hero-card { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.primary-btn, .ghost-btn { border: none; border-radius: 999px; padding: 10px 14px; cursor: pointer; font-weight: 600; }
+.primary-btn { background: var(--primary); color: #fff; }
+.ghost-btn { background: var(--border); color: var(--text); }
+.stack { display: grid; gap: 12px; margin-top: 12px; }
+.item-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+.badge { display: inline-block; padding: 4px 8px; border-radius: 999px; background: rgba(79, 70, 229, .12); color: var(--primary); font-size: .8rem; margin-bottom: 8px; }
+.stats-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+.stat-box { padding: 12px; border: 1px solid var(--border); border-radius: 12px; text-align: center; }
+.stat-box strong { display: block; font-size: 1.2rem; margin-bottom: 4px; }
+.toolbar { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin-top: 12px; }
+.toolbar input, .toolbar select { width: 100%; }
+.warning-card { border-color: #f59e0b; color: #b45309; }
+.dialog-form { display: grid; gap: 8px; min-width: min(90vw, 320px); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+input, textarea { padding: 10px; border-radius: 10px; border: 1px solid var(--border); width: 100%; font: inherit; }
+@media (min-width: 700px) { .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
