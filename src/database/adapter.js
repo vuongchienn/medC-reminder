@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 
-import mysql from 'mysql2/promise';
 import pg from 'pg';
 
 dotenv.config();
@@ -39,7 +38,6 @@ function getPostgresConfig() {
 }
 
 let connection = null;
-let dbType = process.env.DB_TYPE || 'sqlite';
 
 
 
