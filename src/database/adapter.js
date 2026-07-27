@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
-import { DatabaseSync } from 'node:sqlite';
+
 import mysql from 'mysql2/promise';
 import pg from 'pg';
 
@@ -41,83 +41,7 @@ function getPostgresConfig() {
 let connection = null;
 let dbType = process.env.DB_TYPE || 'sqlite';
 
-function getSqliteConnection() {
-  const dbPath = process.env.SQLITE_PATH || './data/medremind.db';
-  const absoluteDbPath = path.resolve(dbPath);
-  const dbDir = path.dirname(absoluteDbPath);
 
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-  }
-
-  const sqliteDb = new DatabaseSync(absoluteDbPath);
-  return {
-    type: 'sqlite',
-    connection: sqliteDb,
-    exec(sql) {
-      sqliteDb.exec(sql);
-    },
-    prepare(sql) {
-      const statement = sqliteDb.prepare(sql);
-      return {
-        run(...params) {
-          const result = statement.run(...params);
-          return { lastInsertRowid: result.lastInsertRowid, changes: result.changes };
-        },
-        get(...params) {
-          return statement.get(...params);
-        },
-        all(...params) {
-          return statement.all(...params);
-        }
-      };
-    },
-    async close() {
-      sqliteDb.close();
-    }
-  };
-}
-
-async function getMysqlConnection() {
-  const pool = mysql.createPool({
-    host: process.env.MYSQL_HOST,
-    port: Number(process.env.MYSQL_PORT || 3306),
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASSWORD,
-    database: process.env.MYSQL_DATABASE,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-  });
-
-  return {
-    type: 'mysql',
-    connection: pool,
-    async exec(sql) {
-      await pool.query(sql);
-    },
-    prepare(sql) {
-      const toPositional = (params) => params.map((_, index) => `?`).join(', ');
-      return {
-        async run(...params) {
-          const [result] = await pool.query(sql.replace(/\?/g, '?'), params);
-          return { lastInsertRowid: result.insertId ?? 0, changes: result.affectedRows ?? 0 };
-        },
-        async get(...params) {
-          const [rows] = await pool.query(sql.replace(/\?/g, '?'), params);
-          return rows[0] || null;
-        },
-        async all(...params) {
-          const [rows] = await pool.query(sql.replace(/\?/g, '?'), params);
-          return rows;
-        }
-      };
-    },
-    async close() {
-      await pool.end();
-    }
-  };
-}
 
 async function getPostgresConnection() {
   const config = getPostgresConfig();
@@ -164,18 +88,8 @@ async function getPostgresConnection() {
 }
 
 export async function initDatabase() {
-  dbType = process.env.DB_TYPE || 'sqlite';
-  if (dbType === 'mysql') {
-    connection = await getMysqlConnection();
-    return { type: 'mysql', connection };
-  }
-  if (dbType === 'postgres') {
-    connection = await getPostgresConnection();
-    return { type: 'postgres', connection };
-  }
-
-  connection = getSqliteConnection();
-  return { type: 'sqlite', connection };
+  connection = await getPostgresConnection();
+  return connection;
 }
 
 export function getDb() {
