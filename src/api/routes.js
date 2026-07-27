@@ -138,7 +138,11 @@ router.post('/api/jobs/process-reminders', async (req, res) => {
   }
   const reminders = await getDueRemindersForNow();
   const results = await Promise.all(reminders.map(sendReminderPush));
-  res.json({ checked: reminders.length, delivered: results.reduce((total, item) => total + (item.delivered || 0), 0) });
+  res.json({
+    checked: reminders.length,
+    delivered: results.reduce((total, item) => total + (item.delivered || 0), 0),
+    results
+  });
 });
 
 router.get('/api/stats', async (req, res) => {

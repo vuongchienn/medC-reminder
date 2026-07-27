@@ -67,7 +67,18 @@ export async function sendReminderPush(reminder) {
     }
   }));
 
-  return { sent: delivered > 0, delivered };
+  // Do not permanently suppress this reminder when there were no active
+  // subscriptions (or delivery failed). The next cron run can retry it.
+  if (!delivered) {
+    await db.prepare('DELETE FROM reminder_notifications WHERE reminder_id = ?').run(reminder.id);
+  }
+
+  return {
+    sent: delivered > 0,
+    delivered,
+    subscriptions: subscriptions.length,
+    reason: delivered ? undefined : 'no-delivery'
+  };
 }
 
 /** Send a user-triggered diagnostic notification without changing reminder state. */
