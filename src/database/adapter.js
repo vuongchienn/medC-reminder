@@ -9,6 +9,35 @@ dotenv.config();
 
 const { Pool } = pg;
 
+function getPostgresConfig() {
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+
+  if (connectionString) {
+    try {
+      const parsed = new URL(connectionString);
+      return {
+        host: parsed.hostname,
+        port: Number(parsed.port || 5432),
+        database: parsed.pathname.replace(/^\/+/, ''),
+        user: decodeURIComponent(parsed.username),
+        password: decodeURIComponent(parsed.password),
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      };
+    } catch (error) {
+      console.warn(`Invalid DATABASE_URL, falling back to DB_* variables: ${error.message}`);
+    }
+  }
+
+  return {
+    host: process.env.DB_HOST || process.env.POSTGRES_HOST || 'localhost',
+    port: Number(process.env.DB_PORT || process.env.POSTGRES_PORT || 5432),
+    database: process.env.DB_NAME || process.env.POSTGRES_DB || process.env.POSTGRES_DATABASE || 'postgres',
+    user: process.env.DB_USER || process.env.POSTGRES_USER || 'postgres',
+    password: process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || '',
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  };
+}
+
 let connection = null;
 let dbType = process.env.DB_TYPE || 'sqlite';
 
@@ -91,9 +120,14 @@ async function getMysqlConnection() {
 }
 
 async function getPostgresConnection() {
+  const config = getPostgresConfig();
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    host: config.host,
+    port: config.port,
+    database: config.database,
+    user: config.user,
+    password: config.password,
+    ssl: config.ssl
   });
 
   return {
