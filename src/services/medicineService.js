@@ -22,7 +22,7 @@ export async function createMedicine(input, userId) {
       updated_at
       , user_id, cycle_days, break_days, stock_quantity, low_stock_threshold, shopping_needed
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
   `);
 
