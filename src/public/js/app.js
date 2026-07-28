@@ -1,5 +1,5 @@
 const state = {
-  medicines: [], reminders: [], history: [], stats: {},
+  medicines: [], reminders: [], history: [], stats: {}, user: null,
   filters: { search: '', status: 'all' }, medicinePage: 1, medicinesPerPage: 6
 };
 const notifiedReminderIds = new Set();
@@ -136,6 +136,7 @@ async function retryDueNotifications() {
 }
 
 async function loadData() {
+  if (!state.user) return;
   beginLoading();
   try {
     const [medicinesRes, remindersRes, historyRes, statsRes] = await Promise.all([
@@ -188,6 +189,8 @@ function render() {
     : '<p class="empty-state">Chưa có lịch sử dùng thuốc.</p>';
   document.getElementById('forgottenList').innerHTML = (state.stats.topForgottenMedicines || []).slice(0, 4).map((item) => `<div class="item-card"><strong>${escapeHtml(item.name)}</strong><p>${item.count} liều bỏ lỡ</p></div>`).join('');
   maybeShowNotifications();
+  renderReports();
+  enhanceReminderActions();
 }
 
 function renderMedicines() {
@@ -221,7 +224,14 @@ function maybeShowNotifications() {
 async function takeAction(id, action) {
   beginLoading(action === 'taken' ? 'Đang ghi nhận liều đã uống...' : 'Đang dời lịch nhắc 10 phút...');
   try {
-    await requireSuccess(await fetch(action === 'taken' ? `/api/reminders/${id}/taken` : `/api/reminders/${id}/snooze`, { method: 'POST' }));
+    let options = { method: 'POST' };
+    if (action === 'taken') {
+      const when = window.prompt('Thời điểm đã uống (để trống = hiện tại, ví dụ 2026-07-28T08:30):', '');
+      if (when === null) return;
+      const note = window.prompt('Ghi chú (không bắt buộc):', '') ?? '';
+      options = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actualTakenAt: when || null, note }) };
+    }
+    await requireSuccess(await fetch(action === 'taken' ? `/api/reminders/${id}/taken` : `/api/reminders/${id}/snooze`, options));
     await loadData();
     showToast(action === 'taken' ? 'Đã ghi nhận liều đã uống.' : 'Đã dời giờ nhắc thêm 10 phút.');
   } catch (error) {
@@ -254,6 +264,12 @@ function openMedicineDialog(medicine = null) {
   form.elements.endDate.value = dateInputValue(medicine?.end_date || medicine?.endDate);
   form.elements.schedules.value = medicine ? scheduleText(medicine).replace('Chưa đặt giờ uống', '') : '';
   form.elements.active.checked = medicine ? Boolean(medicine.active) : true;
+  ensureMedicineExtraFields();
+  form.elements.cycleDays.value = medicine?.cycle_days ?? medicine?.cycleDays ?? 1;
+  form.elements.breakDays.value = medicine?.break_days ?? medicine?.breakDays ?? 0;
+  form.elements.stockQuantity.value = medicine?.stock_quantity ?? medicine?.stockQuantity ?? '';
+  form.elements.lowStockThreshold.value = medicine?.low_stock_threshold ?? medicine?.lowStockThreshold ?? '';
+  form.elements.shoppingNeeded.checked = Boolean(medicine?.shopping_needed ?? medicine?.shoppingNeeded);
   document.getElementById('medicineDialogTitle').textContent = medicine ? 'Sửa thuốc' : 'Thêm thuốc';
   document.getElementById('medicineDialog').showModal();
 }
@@ -360,7 +376,7 @@ document.getElementById('medicineForm').addEventListener('submit', async (event)
   event.preventDefault();
   const form = new FormData(event.target);
   const id = form.get('id');
-  const payload = { name: form.get('name'), description: form.get('description'), dosage: form.get('dosage'), unit: form.get('unit'), notes: form.get('notes'), startDate: form.get('startDate'), endDate: form.get('endDate'), active: form.get('active') === 'on', schedules: form.get('schedules').split(',').map((time) => time.trim()).filter(Boolean).map((timeOfDay) => ({ timeOfDay })) };
+  const payload = { name: form.get('name'), description: form.get('description'), dosage: form.get('dosage'), unit: form.get('unit'), notes: form.get('notes'), startDate: form.get('startDate'), endDate: form.get('endDate'), active: form.get('active') === 'on', cycleDays: form.get('cycleDays'), breakDays: form.get('breakDays'), stockQuantity: form.get('stockQuantity'), lowStockThreshold: form.get('lowStockThreshold'), shoppingNeeded: form.get('shoppingNeeded') === 'on', schedules: form.get('schedules').split(',').map((time) => time.trim()).filter(Boolean).map((timeOfDay) => ({ timeOfDay })) };
   beginLoading(id ? 'Đang cập nhật thuốc...' : 'Đang thêm thuốc...');
   try {
     await requireSuccess(await fetch(id ? `/api/medicines/${id}` : '/api/medicines', { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }));
@@ -421,3 +437,76 @@ document.getElementById('themeSelect').value = savedAccent;
 updateLiveClock();
 setInterval(updateLiveClock, 1000);
 loadData();
+
+pageTitles.reports = 'Báo cáo';
+let authMode = 'login';
+
+function ensureMedicineExtraFields() {
+  const form = document.getElementById('medicineForm');
+  if (form.elements.cycleDays) return;
+  const schedules = form.elements.schedules.closest('label');
+  schedules.insertAdjacentHTML('beforebegin', `<div class="form-row"><label>Ngày uống liên tiếp<input name="cycleDays" type="number" min="1" value="1" /></label><label>Ngày nghỉ<input name="breakDays" type="number" min="0" value="0" /></label></div><div class="form-row"><label>Tồn kho<input name="stockQuantity" type="number" min="0" step="0.5" /></label><label>Nhắc mua khi còn<input name="lowStockThreshold" type="number" min="0" step="0.5" /></label></div><label class="checkbox-label"><input name="shoppingNeeded" type="checkbox" /> Cần mua thêm</label>`);
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  document.getElementById('authTitle').textContent = mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản';
+  document.getElementById('displayNameField').hidden = mode === 'login';
+  document.querySelector('#authForm button[type="submit"]').textContent = mode === 'login' ? 'Đăng nhập' : 'Đăng ký';
+  document.getElementById('toggleAuthBtn').textContent = mode === 'login' ? 'Chưa có tài khoản? Đăng ký' : 'Đã có tài khoản? Đăng nhập';
+  document.getElementById('authError').textContent = '';
+}
+
+async function initializeAuth() {
+  try {
+    const response = await fetch('/api/auth/me');
+    if (!response.ok) throw new Error('not signed in');
+    state.user = (await response.json()).user;
+  } catch {
+    setAuthMode('login');
+    document.getElementById('authDialog').showModal();
+  }
+}
+
+document.getElementById('toggleAuthBtn').addEventListener('click', () => setAuthMode(authMode === 'login' ? 'signup' : 'login'));
+document.getElementById('authForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const error = document.getElementById('authError'); error.textContent = '';
+  try {
+    const response = await fetch(`/api/auth/${authMode === 'login' ? 'login' : 'signup'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(form)) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Không thể xác thực.');
+    state.user = data.user;
+    document.getElementById('authDialog').close();
+    await loadData();
+  } catch (err) { error.textContent = err.message; }
+});
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' }); state.user = null; setAuthMode('login'); document.getElementById('authDialog').showModal();
+});
+
+function renderReports() {
+  const canvas = document.getElementById('adherenceChart'); if (!canvas) return;
+  const ctx = canvas.getContext('2d'); const width = canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1); const height = canvas.height = 220 * (window.devicePixelRatio || 1); ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+  const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); return d.toISOString().slice(0, 10); });
+  const values = days.map((day) => { const doses = state.history.filter((item) => String(item.scheduled_time).slice(0, 10) === day); return doses.length ? Math.round(doses.filter((item) => item.status === 'taken').length * 100 / doses.length) : 0; });
+  const w = canvas.clientWidth, h = 220; ctx.clearRect(0, 0, w, h); ctx.strokeStyle = '#d1d5db'; ctx.beginPath(); ctx.moveTo(30, 18); ctx.lineTo(30, h - 32); ctx.lineTo(w - 10, h - 32); ctx.stroke();
+  const slot = (w - 52) / 7; values.forEach((value, i) => { const bar = Math.max(3, value * (h - 64) / 100); const x = 38 + i * slot; ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--primary'); ctx.fillRect(x, h - 32 - bar, Math.max(10, slot - 12), bar); ctx.fillStyle = getComputedStyle(document.body).color; ctx.font = '11px system-ui'; ctx.fillText(`${value}%`, x, h - 38 - bar); ctx.fillText(days[i].slice(8), x + 3, h - 14); });
+  const perMedicine = state.medicines.map((medicine) => { const records = state.history.filter((item) => String(item.medicine_id) === String(medicine.id)); const taken = records.filter((item) => item.status === 'taken').length; return `<div class="item-card"><strong>${escapeHtml(medicine.name)}</strong><p>${records.length ? Math.round(taken * 100 / records.length) : 0}% tuân thủ · ${taken}/${records.length} liều đã uống${medicine.stock_quantity != null ? ` · Còn ${medicine.stock_quantity} ${escapeHtml(medicine.unit || '')}` : ''}${medicine.shopping_needed ? ' · Cần mua thêm' : ''}</p></div>`; }).join('');
+  document.getElementById('medicineReportList').innerHTML = perMedicine || '<p class="empty-state">Chưa có dữ liệu để lập báo cáo.</p>';
+}
+
+function enhanceReminderActions() {
+  state.reminders.forEach((reminder) => {
+    const card = document.querySelector(`.reminder-card[data-reminder-id="${reminder.id}"]`); if (!card) return;
+    const actions = card.querySelector('.dialog-actions'); if (!actions || actions.querySelector('.extra-dose-actions')) return;
+    const extra = document.createElement('span'); extra.className = 'extra-dose-actions';
+    if (reminder.status === 'pending') extra.innerHTML = `<button class="ghost-btn" data-extra="skip">Bỏ qua</button>`;
+    else extra.innerHTML = `<button class="ghost-btn" data-extra="undo">Hoàn tác</button>`;
+    extra.querySelector('button').addEventListener('click', async (event) => { event.stopPropagation(); const action = event.currentTarget.dataset.extra; const reason = action === 'skip' ? window.prompt('Lý do bỏ qua liều này?') : null; if (action === 'skip' && reason === null) return; await fetch(`/api/reminders/${reminder.id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) }); await loadData(); }); actions.append(extra);
+  });
+}
+
+document.getElementById('printReportBtn').addEventListener('click', () => { openView('reports'); window.print(); });
+initializeAuth();

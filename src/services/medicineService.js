@@ -5,7 +5,7 @@ const db = getDb();
 /**
  * Create a medicine and its schedules.
  */
-export async function createMedicine(input) {
+export async function createMedicine(input, userId) {
   const now = new Date().toISOString();
 
   const stmt = db.prepare(`
@@ -20,8 +20,9 @@ export async function createMedicine(input) {
       active,
       created_at,
       updated_at
+      , user_id, cycle_days, break_days, stock_quantity, low_stock_threshold, shopping_needed
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
   `);
 
@@ -35,7 +36,13 @@ export async function createMedicine(input) {
     input.endDate || null,
     input.active === false ? false : true,
     now,
-    now
+    now,
+    userId,
+    Math.max(1, Number(input.cycleDays) || 1),
+    Math.max(0, Number(input.breakDays) || 0),
+    input.stockQuantity === '' || input.stockQuantity == null ? null : Number(input.stockQuantity),
+    input.lowStockThreshold === '' || input.lowStockThreshold == null ? null : Number(input.lowStockThreshold),
+    Boolean(input.shoppingNeeded)
   );
 
   const medicineId = inserted.id;
@@ -59,13 +66,13 @@ export async function createMedicine(input) {
     }
   }
 
-  return await getMedicineById(medicineId);
+  return await getMedicineById(medicineId, userId);
 }
 
 /**
  * Get all medicines with schedules.
  */
-export async function getMedicines(filters = {}) {
+export async function getMedicines(filters = {}, userId) {
   let query = `
     SELECT
       m.*,
@@ -77,6 +84,8 @@ export async function getMedicines(filters = {}) {
   `;
 
   const params = [];
+  query += ' AND m.user_id = ?';
+  params.push(userId);
 
   if (filters.search) {
     query += ` AND m.name ILIKE ?`;
@@ -114,7 +123,7 @@ query += ' AND m.active = TRUE';
 /**
  * Get medicine by id.
  */
-export async function getMedicineById(id) {
+export async function getMedicineById(id, userId) {
   const row = await db.prepare(`
     SELECT
       m.*,
@@ -122,9 +131,9 @@ export async function getMedicineById(id) {
     FROM medicines m
     LEFT JOIN medicine_schedules s
       ON s.medicine_id = m.id
-    WHERE m.id = ?
+    WHERE m.id = ? AND m.user_id = ?
     GROUP BY m.id
-  `).get(id);
+  `).get(id, userId);
 
   if (!row) {
     return null;
@@ -146,7 +155,7 @@ export async function getMedicineById(id) {
 /**
  * Update medicine.
  */
-export async function updateMedicine(id, input) {
+export async function updateMedicine(id, input, userId) {
   const now = new Date().toISOString();
 
   await db.prepare(`
@@ -160,8 +169,13 @@ export async function updateMedicine(id, input) {
       start_date = ?,
       end_date = ?,
       active = ?,
+      cycle_days = ?,
+      break_days = ?,
+      stock_quantity = ?,
+      low_stock_threshold = ?,
+      shopping_needed = ?,
       updated_at = ?
-    WHERE id = ?
+    WHERE id = ? AND user_id = ?
   `).run(
     input.name,
     input.description || '',
@@ -171,8 +185,14 @@ export async function updateMedicine(id, input) {
     input.startDate || null,
     input.endDate || null,
     input.active === false ? false : true,
+    Math.max(1, Number(input.cycleDays) || 1),
+    Math.max(0, Number(input.breakDays) || 0),
+    input.stockQuantity === '' || input.stockQuantity == null ? null : Number(input.stockQuantity),
+    input.lowStockThreshold === '' || input.lowStockThreshold == null ? null : Number(input.lowStockThreshold),
+    Boolean(input.shoppingNeeded),
     now,
-    id
+    id,
+    userId
   );
 
   await db.prepare(`
@@ -199,17 +219,17 @@ export async function updateMedicine(id, input) {
     }
   }
 
-  return await getMedicineById(id);
+  return await getMedicineById(id, userId);
 }
 
 /**
  * Delete medicine.
  */
-export async function deleteMedicine(id) {
+export async function deleteMedicine(id, userId) {
   const result = await db.prepare(`
     DELETE FROM medicines
-    WHERE id = ?
-  `).run(id);
+    WHERE id = ? AND user_id = ?
+  `).run(id, userId);
 
   return (result.changes || 0) > 0;
 }

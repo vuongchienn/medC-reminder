@@ -18,6 +18,22 @@ export async function runMigrations() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      display_name VARCHAR(120) NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash VARCHAR(128) NOT NULL UNIQUE,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS medicine_schedules (
       id SERIAL PRIMARY KEY,
       medicine_id INTEGER NOT NULL REFERENCES medicines(id) ON DELETE CASCADE,
@@ -63,6 +79,18 @@ export async function runMigrations() {
       reminder_id INTEGER PRIMARY KEY REFERENCES reminders(id) ON DELETE CASCADE,
       sent_at TIMESTAMP NOT NULL
     );
+  `);
+
+  await db.exec(`
+    ALTER TABLE medicines ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    ALTER TABLE reminder_history ADD COLUMN IF NOT EXISTS note TEXT;
+    ALTER TABLE reminder_history ADD COLUMN IF NOT EXISTS skipped_reason TEXT;
+    ALTER TABLE medicines ADD COLUMN IF NOT EXISTS cycle_days INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE medicines ADD COLUMN IF NOT EXISTS break_days INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE medicines ADD COLUMN IF NOT EXISTS stock_quantity NUMERIC;
+    ALTER TABLE medicines ADD COLUMN IF NOT EXISTS low_stock_threshold NUMERIC;
+    ALTER TABLE medicines ADD COLUMN IF NOT EXISTS shopping_needed BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 
   await db.exec(`

@@ -5,16 +5,17 @@ const db = getDb();
 /**
  * Export medicine history as CSV.
  */
-export async function exportHistoryCsv() {
+export async function exportHistoryCsv(userId) {
   const rows = await db.prepare(`
     SELECT
       medicine_name,
       scheduled_time,
       actual_taken_at,
       status
-    FROM reminder_history
-    ORDER BY created_at DESC
-  `).all();
+    FROM reminder_history h JOIN medicines m ON m.id = h.medicine_id
+    WHERE m.user_id = ?
+    ORDER BY h.created_at DESC
+  `).all(userId);
 
   const headers = [
     'medicine_name',
@@ -39,16 +40,17 @@ export async function exportHistoryCsv() {
 /**
  * Export history as JSON.
  */
-export async function exportHistoryJson() {
+export async function exportHistoryJson(userId) {
   const rows = await db.prepare(`
     SELECT
       medicine_name,
       scheduled_time,
       actual_taken_at,
       status
-    FROM reminder_history
-    ORDER BY created_at DESC
-  `).all();
+    FROM reminder_history h JOIN medicines m ON m.id = h.medicine_id
+    WHERE m.user_id = ?
+    ORDER BY h.created_at DESC
+  `).all(userId);
 
   return JSON.stringify(rows, null, 2);
 }
@@ -56,22 +58,22 @@ export async function exportHistoryJson() {
 /**
  * Export full backup.
  */
-export async function exportBackup() {
+export async function exportBackup(userId) {
   const medicines = await db.prepare(
-    'SELECT * FROM medicines'
-  ).all();
+    'SELECT * FROM medicines WHERE user_id = ?'
+  ).all(userId);
 
   const schedules = await db.prepare(
-    'SELECT * FROM medicine_schedules'
-  ).all();
+    'SELECT s.* FROM medicine_schedules s JOIN medicines m ON m.id = s.medicine_id WHERE m.user_id = ?'
+  ).all(userId);
 
   const reminders = await db.prepare(
-    'SELECT * FROM reminders'
-  ).all();
+    'SELECT r.* FROM reminders r JOIN medicines m ON m.id = r.medicine_id WHERE m.user_id = ?'
+  ).all(userId);
 
   const history = await db.prepare(
-    'SELECT * FROM reminder_history'
-  ).all();
+    'SELECT h.* FROM reminder_history h JOIN medicines m ON m.id = h.medicine_id WHERE m.user_id = ?'
+  ).all(userId);
 
   const settings = await db.prepare(
     'SELECT * FROM settings'

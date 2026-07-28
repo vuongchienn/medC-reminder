@@ -45,7 +45,7 @@ async function createReminderIfMissing(medicine, scheduledTime) {
 
 async function getActiveMedicinesForDate(dateKey) {
   return db.prepare(`
-    SELECT m.id, m.name, m.dosage, m.unit
+    SELECT m.id, m.name, m.dosage, m.unit, m.user_id, m.start_date, m.cycle_days, m.break_days
     FROM medicines m
     WHERE m.active = TRUE
       AND (m.end_date IS NULL OR m.end_date >= ?)
@@ -53,11 +53,21 @@ async function getActiveMedicinesForDate(dateKey) {
   `).all(dateKey, dateKey);
 }
 
+function isMedicineOnCycle(medicine, dateKey) {
+  const start = new Date(`${String(medicine.start_date).slice(0, 10)}T00:00:00Z`);
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  const day = Math.floor((date - start) / 86400_000);
+  const taking = Math.max(1, Number(medicine.cycle_days) || 1);
+  const resting = Math.max(0, Number(medicine.break_days) || 0);
+  return day >= 0 && day % (taking + resting) < taking;
+}
+
 /** Ensure every active dose for a Vietnam calendar day exists before it is due. */
 export async function ensureRemindersForDate(dateKey) {
   const medicines = await getActiveMedicinesForDate(dateKey);
   const created = [];
   for (const medicine of medicines) {
+    if (!isMedicineOnCycle(medicine, dateKey)) continue;
     const schedules = await db.prepare(`
       SELECT time_of_day FROM medicine_schedules
       WHERE medicine_id = ? AND enabled = TRUE
@@ -83,6 +93,7 @@ export async function generateRemindersForNow() {
   const reminders = [];
 
   for (const medicine of activeMedicines) {
+    if (!isMedicineOnCycle(medicine, dateKey)) continue;
     const schedules = await db.prepare(`
       SELECT
         id,
@@ -109,7 +120,7 @@ export async function generateRemindersForNow() {
 /**
  * List reminders.
  */
-export async function getReminders(filters = {}) {
+export async function getReminders(filters = {}, userId) {
   if (!filters.all) {
     await ensureRemindersForDate(vietnamDateParts().dateKey);
   }
@@ -118,14 +129,15 @@ export async function getReminders(filters = {}) {
       r.*,
       m.name AS medicine_name,
       m.dosage,
-      m.unit
+      m.unit,
+      m.user_id
     FROM reminders r
     JOIN medicines m
       ON m.id = r.medicine_id
-    WHERE 1=1
+    WHERE m.user_id = ?
   `;
 
-  const params = [];
+  const params = [userId];
 
   if (filters.status) {
     query += ` AND r.status = ?`;
@@ -146,18 +158,19 @@ export async function getReminders(filters = {}) {
 /**
  * Mark reminder as taken.
  */
-export async function markReminderTaken(reminderId) {
+export async function markReminderTaken(reminderId, userId, { actualTakenAt, note } = {}) {
   const reminder = await db.prepare(`
-    SELECT *
-    FROM reminders
-    WHERE id = ?
-  `).get(reminderId);
+    SELECT r.*, m.stock_quantity, m.low_stock_threshold, m.dosage FROM reminders r JOIN medicines m ON m.id = r.medicine_id
+    WHERE r.id = ? AND m.user_id = ?
+  `).get(reminderId, userId);
 
   if (!reminder) {
     return null;
   }
 
-  const now = new Date().toISOString();
+  const customTime = actualTakenAt ? new Date(actualTakenAt) : null;
+  if (customTime && Number.isNaN(customTime.getTime())) throw new Error('Thời điểm đã uống không hợp lệ.');
+  const now = customTime ? customTime.toISOString() : new Date().toISOString();
 
   await db.prepare(`
     UPDATE reminders
@@ -174,13 +187,19 @@ export async function markReminderTaken(reminderId) {
 
   await db.prepare(`
     UPDATE reminder_history
-    SET actual_taken_at = ?, status = 'taken'
+    SET actual_taken_at = ?, status = 'taken', note = ?, skipped_reason = NULL
     WHERE id = (
       SELECT id FROM reminder_history
       WHERE medicine_id = ? AND scheduled_time = ?
       ORDER BY id DESC LIMIT 1
     )
-  `).run(now, reminder.medicine_id, reminder.scheduled_time);
+  `).run(now, note || null, reminder.medicine_id, reminder.scheduled_time);
+
+  if (reminder.stock_quantity != null) {
+    const used = Number(reminder.dosage);
+    const remaining = Math.max(0, Number(reminder.stock_quantity) - (Number.isFinite(used) && used > 0 ? used : 1));
+    await db.prepare('UPDATE medicines SET stock_quantity = ?, shopping_needed = CASE WHEN low_stock_threshold IS NOT NULL AND ? <= low_stock_threshold THEN TRUE ELSE shopping_needed END WHERE id = ?').run(remaining, remaining, reminder.medicine_id);
+  }
 
   return {
     id: reminderId,
@@ -188,15 +207,33 @@ export async function markReminderTaken(reminderId) {
   };
 }
 
+export async function skipReminder(reminderId, userId, reason) {
+  const reminder = await db.prepare('SELECT r.* FROM reminders r JOIN medicines m ON m.id = r.medicine_id WHERE r.id = ? AND m.user_id = ?').get(reminderId, userId);
+  if (!reminder) return null;
+  const now = new Date().toISOString();
+  await db.prepare("UPDATE reminders SET status = 'skipped', updated_at = ? WHERE id = ?").run(now, reminderId);
+  await db.prepare("UPDATE reminder_history SET status = 'skipped', skipped_reason = ?, note = NULL WHERE id = (SELECT id FROM reminder_history WHERE medicine_id = ? AND scheduled_time = ? ORDER BY id DESC LIMIT 1)").run(reason || 'Không nêu lý do', reminder.medicine_id, reminder.scheduled_time);
+  return { id: reminderId, status: 'skipped' };
+}
+
+export async function undoReminder(reminderId, userId) {
+  const reminder = await db.prepare('SELECT r.*, m.stock_quantity, m.dosage FROM reminders r JOIN medicines m ON m.id = r.medicine_id WHERE r.id = ? AND m.user_id = ?').get(reminderId, userId);
+  if (!reminder) return null;
+  if (reminder.status === 'taken' && reminder.stock_quantity != null) { const used = Number(reminder.dosage); await db.prepare('UPDATE medicines SET stock_quantity = stock_quantity + ? WHERE id = ?').run(Number.isFinite(used) && used > 0 ? used : 1, reminder.medicine_id); }
+  const now = new Date().toISOString();
+  await db.prepare("UPDATE reminders SET status = 'pending', actual_taken_at = NULL, updated_at = ? WHERE id = ?").run(now, reminderId);
+  await db.prepare("UPDATE reminder_history SET status = 'pending', actual_taken_at = NULL, note = NULL, skipped_reason = NULL WHERE id = (SELECT id FROM reminder_history WHERE medicine_id = ? AND scheduled_time = ? ORDER BY id DESC LIMIT 1)").run(reminder.medicine_id, reminder.scheduled_time);
+  return { id: reminderId, status: 'pending' };
+}
+
 /**
  * Snooze reminder for 10 minutes.
  */
-export async function snoozeReminder(reminderId) {
+export async function snoozeReminder(reminderId, userId) {
   const reminder = await db.prepare(`
-    SELECT *
-    FROM reminders
-    WHERE id = ?
-  `).get(reminderId);
+    SELECT r.* FROM reminders r JOIN medicines m ON m.id = r.medicine_id
+    WHERE r.id = ? AND m.user_id = ?
+  `).get(reminderId, userId);
 
   if (!reminder) {
     return null;
@@ -235,18 +272,22 @@ export async function snoozeReminder(reminderId) {
 }
 
 /** Pending doses that are now due in Vietnam time. Used by the free cron endpoint. */
-export async function getDueRemindersForNow() {
-  return await db.prepare(`
+export async function getDueRemindersForNow(userId = null) {
+  let query = `
     SELECT
       r.*,
       m.name AS medicine_name,
       m.dosage,
-      m.unit
+      m.unit,
+      m.user_id
     FROM reminders r
     JOIN medicines m
       ON m.id = r.medicine_id
     WHERE r.status = 'pending'
       AND r.scheduled_time <= NOW()
-    ORDER BY r.scheduled_time ASC
-  `).all();
+  `;
+  const params = [];
+  if (userId != null) { query += ' AND m.user_id = ?'; params.push(userId); }
+  query += ' ORDER BY r.scheduled_time ASC';
+  return await db.prepare(query).all(...params);
 }

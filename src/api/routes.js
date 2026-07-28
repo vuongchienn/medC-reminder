@@ -10,7 +10,9 @@ import {
 import {
   getReminders,
   markReminderTaken,
-  snoozeReminder
+  snoozeReminder,
+  skipReminder,
+  undoReminder
 } from '../services/reminderService.js';
 import { getDueRemindersForNow } from '../services/reminderService.js';
 import { getPublicKey, saveSubscription, sendReminderPush, sendTestPush } from '../services/pushService.js';
@@ -23,20 +25,51 @@ import {
 } from '../services/exportService.js';
 
 import { getDb } from '../database/db.js';
+import { getSessionUser, signIn, signOut, signUp, sessionCookie } from '../services/authService.js';
 
 const router = express.Router();
 const db = getDb();
 
+function readCookie(req, name) {
+  return String(req.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1);
+}
+function setSession(res, session) {
+  res.cookie(sessionCookie.name, session.token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: sessionCookie.maxAge, path: '/' });
+}
+router.post('/api/auth/signup', async (req, res) => {
+  try { const result = await signUp(req.body); setSession(res, result.session); res.status(201).json({ user: result.user }); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
+router.post('/api/auth/login', async (req, res) => {
+  try { const result = await signIn(req.body); setSession(res, result.session); res.json({ user: result.user }); }
+  catch (error) { res.status(401).json({ error: error.message }); }
+});
+router.post('/api/auth/logout', async (req, res) => {
+  await signOut(readCookie(req, sessionCookie.name));
+  res.clearCookie(sessionCookie.name, { path: '/' }); res.json({ success: true });
+});
+router.get('/api/auth/me', async (req, res) => {
+  const user = await getSessionUser(readCookie(req, sessionCookie.name));
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  res.json({ user: { id: user.id, email: user.email, displayName: user.display_name } });
+});
+router.use('/api', async (req, res, next) => {
+  if (req.path.startsWith('/auth/') || req.path === '/jobs/process-reminders') return next();
+  const user = await getSessionUser(readCookie(req, sessionCookie.name));
+  if (!user) return res.status(401).json({ error: 'Vui lòng đăng nhập.' });
+  req.user = user; next();
+});
+
 router.get('/api/medicines', async (req, res) => {
-  res.json(await getMedicines(req.query));
+  res.json(await getMedicines(req.query, req.user.id));
 });
 
 router.post('/api/medicines', async (req, res) => {
-  res.json(await createMedicine(req.body));
+  res.json(await createMedicine(req.body, req.user.id));
 });
 
 router.get('/api/medicines/:id', async (req, res) => {
-  const medicine = await getMedicineById(Number(req.params.id));
+  const medicine = await getMedicineById(Number(req.params.id), req.user.id);
 
   if (!medicine) {
     return res.status(404).json({
@@ -51,15 +84,13 @@ router.put('/api/medicines/:id', async (req, res) => {
   res.json(
     await updateMedicine(
       Number(req.params.id),
-      req.body
+      req.body, req.user.id
     )
   );
 });
 
 router.delete('/api/medicines/:id', async (req, res) => {
-  const deleted = await deleteMedicine(
-    Number(req.params.id)
-  );
+  const deleted = await deleteMedicine(Number(req.params.id), req.user.id);
 
   if (!deleted) {
     return res.status(404).json({
@@ -73,13 +104,11 @@ router.delete('/api/medicines/:id', async (req, res) => {
 });
 
 router.get('/api/reminders', async (req, res) => {
-  res.json(await getReminders(req.query));
+  res.json(await getReminders(req.query, req.user.id));
 });
 
 router.post('/api/reminders/:id/taken', async (req, res) => {
-  const result = await markReminderTaken(
-    Number(req.params.id)
-  );
+  const result = await markReminderTaken(Number(req.params.id), req.user.id, req.body);
 
   if (!result) {
     return res.status(404).json({
@@ -91,9 +120,7 @@ router.post('/api/reminders/:id/taken', async (req, res) => {
 });
 
 router.post('/api/reminders/:id/snooze', async (req, res) => {
-  const result = await snoozeReminder(
-    Number(req.params.id)
-  );
+  const result = await snoozeReminder(Number(req.params.id), req.user.id);
 
   if (!result) {
     return res.status(404).json({
@@ -101,6 +128,18 @@ router.post('/api/reminders/:id/snooze', async (req, res) => {
     });
   }
 
+  res.json(result);
+});
+
+router.post('/api/reminders/:id/skip', async (req, res) => {
+  const result = await skipReminder(Number(req.params.id), req.user.id, req.body.reason);
+  if (!result) return res.status(404).json({ error: 'Reminder not found' });
+  res.json(result);
+});
+
+router.post('/api/reminders/:id/undo', async (req, res) => {
+  const result = await undoReminder(Number(req.params.id), req.user.id);
+  if (!result) return res.status(404).json({ error: 'Reminder not found' });
   res.json(result);
 });
 
@@ -112,7 +151,7 @@ router.get('/api/push/public-key', (req, res) => {
 
 router.post('/api/push/subscribe', async (req, res) => {
   try {
-    await saveSubscription(req.body);
+    await saveSubscription(req.body, req.user.id);
     res.status(201).json({ success: true });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -121,7 +160,7 @@ router.post('/api/push/subscribe', async (req, res) => {
 
 router.post('/api/push/test', async (req, res) => {
   try {
-    const result = await sendTestPush();
+    const result = await sendTestPush(req.user.id);
     console.log('Push test result:', result);
     if (!result.sent) return res.status(503).json(result);
     res.json(result);
@@ -135,7 +174,7 @@ router.post('/api/push/test', async (req, res) => {
 // before any device subscription was available.
 router.post('/api/push/retry-due', async (req, res) => {
   try {
-    const reminders = await getDueRemindersForNow();
+    const reminders = await getDueRemindersForNow(req.user.id);
     await Promise.all(reminders.map((reminder) => db.prepare(
       'DELETE FROM reminder_notifications WHERE reminder_id = ?'
     ).run(reminder.id)));
@@ -165,31 +204,33 @@ router.post('/api/jobs/process-reminders', async (req, res) => {
 router.get('/api/stats', async (req, res) => {
   const history = await db.prepare(`
     SELECT
-      medicine_name,
-      status,
-      created_at,
-      actual_taken_at,
-      scheduled_time
-    FROM reminder_history
-    ORDER BY created_at DESC
-  `).all();
+      h.medicine_name,
+      h.status,
+      h.created_at,
+      h.actual_taken_at,
+      h.scheduled_time
+    FROM reminder_history h
+    JOIN medicines m ON m.id = h.medicine_id
+    WHERE m.user_id = ?
+    ORDER BY h.created_at DESC
+  `).all(req.user.id);
 
   res.json(calculateStats(history));
 });
 
 router.get('/api/export/csv', async (req, res) => {
   res.type('text/csv');
-  res.send(await exportHistoryCsv());
+  res.send(await exportHistoryCsv(req.user.id));
 });
 
 router.get('/api/export/json', async (req, res) => {
   res.type('application/json');
-  res.send(await exportHistoryJson());
+  res.send(await exportHistoryJson(req.user.id));
 });
 
 router.get('/api/backup', async (req, res) => {
   res.type('application/json');
-  res.send(await exportBackup());
+  res.send(await exportBackup(req.user.id));
 });
 
 router.get('/api/settings', async (req, res) => {

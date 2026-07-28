@@ -17,16 +17,16 @@ export function getPublicKey() {
   return configured() ? process.env.VAPID_PUBLIC_KEY : null;
 }
 
-export async function saveSubscription(subscription) {
+export async function saveSubscription(subscription, userId) {
   if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
     throw new Error('Đăng ký thông báo không hợp lệ.');
   }
   const now = new Date().toISOString();
   await db.prepare(`
-    INSERT INTO push_subscriptions (endpoint, subscription_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(endpoint) DO UPDATE SET subscription_json = EXCLUDED.subscription_json, updated_at = EXCLUDED.updated_at
-  `).run(subscription.endpoint, JSON.stringify(subscription), now, now);
+    INSERT INTO push_subscriptions (endpoint, subscription_json, user_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET subscription_json = EXCLUDED.subscription_json, user_id = EXCLUDED.user_id, updated_at = EXCLUDED.updated_at
+  `).run(subscription.endpoint, JSON.stringify(subscription), userId, now, now);
 }
 
 /** Send a background notification for one reminder. It is safe to call repeatedly. */
@@ -46,7 +46,7 @@ export async function sendReminderPush(reminder) {
   `).get(reminder.id, new Date().toISOString());
   if (!claim) return { sent: false, reason: 'already-sent' };
 
-  const subscriptions = await db.prepare('SELECT id, endpoint, subscription_json FROM push_subscriptions').all();
+  const subscriptions = await db.prepare('SELECT id, endpoint, subscription_json FROM push_subscriptions WHERE user_id = ?').all(reminder.user_id);
   // The live scheduler returns camelCase values; the cron query returns
   // database-style snake_case values. Normalize before building the payload.
   reminder.medicine_name ??= reminder.medicineName;
@@ -90,10 +90,10 @@ export async function sendReminderPush(reminder) {
 }
 
 /** Send a user-triggered diagnostic notification without changing reminder state. */
-export async function sendTestPush() {
+export async function sendTestPush(userId) {
   if (!configureWebPush()) return { sent: false, reason: 'not-configured', delivered: 0 };
 
-  const subscriptions = await db.prepare('SELECT id, subscription_json FROM push_subscriptions').all();
+  const subscriptions = await db.prepare('SELECT id, subscription_json FROM push_subscriptions WHERE user_id = ?').all(userId);
   const payload = JSON.stringify({ title: 'MedReminder', body: 'Push test from server.', url: '/' });
   let delivered = 0;
   await Promise.all(subscriptions.map(async (row) => {

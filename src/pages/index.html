@@ -17,6 +17,7 @@
           <button class="nav-link" data-view="schedule">Lịch hôm nay</button>
           <button class="nav-link" data-view="medicines">Thuốc</button>
           <button class="nav-link" data-view="history">Lịch sử</button>
+          <button class="nav-link" data-view="reports">Báo cáo</button>
         </nav>
         <div class="sidebar-footer">
           <label class="theme-picker" for="themeSelect">Màu giao diện</label>
@@ -25,6 +26,7 @@
           </select>
           <button id="enablePushBtn" class="primary-btn">Bật nhắc trên iPhone</button>
           <button id="themeToggle" class="ghost-btn">Chế độ tối</button>
+          <button id="logoutBtn" class="ghost-btn">Đăng xuất</button>
         </div>
       </aside>
       <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
@@ -49,6 +51,7 @@
           <section id="medicines" class="view-section"><section class="card"><div class="section-title"><div><h2>Danh sách thuốc</h2><p id="medicineCount" class="muted"></p></div><button class="primary-btn add-medicine-action">+ Thêm thuốc</button></div><div class="toolbar"><input id="searchInput" placeholder="Tìm theo tên thuốc" /><select id="statusFilter"><option value="all">Tất cả trạng thái</option><option value="active">Đang dùng</option><option value="paused">Tạm dừng</option></select><button id="backupBtn" class="ghost-btn">Sao lưu</button></div><div id="medicineList" class="stack"></div><div id="medicinePagination" class="pagination" aria-label="Phân trang danh sách thuốc"></div></section></section>
 
           <section id="history" class="view-section"><section class="card"><div class="section-title"><h2>Lịch sử</h2><button id="exportBtn" class="ghost-btn">Xuất CSV</button></div><div id="historyList" class="stack"></div></section></section>
+          <section id="reports" class="view-section"><section class="card"><div class="section-title"><div><h2>Báo cáo tuân thủ</h2><p class="muted">Theo dõi 7 ngày gần nhất và in/lưu PDF để gửi bác sĩ.</p></div><button id="printReportBtn" class="ghost-btn">In / Lưu PDF</button></div><canvas id="adherenceChart" height="220"></canvas><div id="medicineReportList" class="stack"></div></section></section>
         </main>
         <footer class="site-footer"><span>MedReminder</span><span>Chăm sóc sức khỏe, đúng giờ mỗi ngày.</span></footer>
       </div>
@@ -56,6 +59,7 @@
 
     <dialog id="medicineDialog"><form method="dialog" id="medicineForm" class="dialog-form"><div class="section-title"><h3 id="medicineDialogTitle">Thêm thuốc</h3><button type="button" id="closeMedicineDialog" class="icon-btn" aria-label="Đóng">×</button></div><input type="hidden" name="id" /><label>Tên thuốc<input name="name" placeholder="Ví dụ: Paracetamol" required /></label><label>Mô tả<textarea name="description" placeholder="Mô tả ngắn"></textarea></label><div class="form-row"><label>Liều lượng<input name="dosage" placeholder="Ví dụ: 1" /></label><label>Đơn vị<input name="unit" placeholder="Ví dụ: viên" value="viên" /></label></div><label>Ghi chú<textarea name="notes" placeholder="Ghi chú"></textarea></label><div class="form-row"><label>Ngày bắt đầu<input name="startDate" type="date" /></label><label>Ngày kết thúc<input name="endDate" type="date" /></label></div><label>Giờ uống<input name="schedules" placeholder="Ví dụ: 08:00, 12:00" /></label><label class="checkbox-label"><input name="active" type="checkbox" checked /> Đang sử dụng</label><div class="dialog-actions"><button type="button" id="cancelMedicineDialog" class="ghost-btn">Hủy</button><button type="submit" class="primary-btn">Lưu</button></div></form></dialog>
     <dialog id="medicineDetailsDialog"><div id="medicineDetails" class="medicine-details"></div></dialog>
+    <dialog id="authDialog" class="auth-dialog"><form id="authForm" class="dialog-form"><h2 id="authTitle">Đăng nhập</h2><label id="displayNameField" hidden>Tên hiển thị<input name="displayName" autocomplete="name" /></label><label>Email<input name="email" type="email" autocomplete="email" required /></label><label>Mật khẩu<input name="password" type="password" autocomplete="current-password" minlength="8" required /></label><p id="authError" class="auth-error"></p><div class="dialog-actions"><button type="submit" class="primary-btn">Đăng nhập</button></div><button id="toggleAuthBtn" type="button" class="text-btn">Chưa có tài khoản? Đăng ký</button></form></dialog>
     <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true" hidden><div class="loading-panel"><span class="spinner"></span><span id="loadingMessage">Đang tải dữ liệu...</span></div></div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="/js/app.js"></script>
