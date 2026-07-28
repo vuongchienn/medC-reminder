@@ -1,5 +1,4 @@
 import { getDueRemindersForNow } from '../services/reminderService.js';
-import { sendTelegramMessage } from '../services/telegramService.js';
 import { sendReminderPush } from '../services/pushService.js';
 
 /**
@@ -11,29 +10,17 @@ export function startScheduler() {
     try {
       const reminders = await getDueRemindersForNow();
 
-      console.log(`Reminder scheduler: ${reminders.length} pending due reminder(s).`);
-
       if (!reminders.length) {
         return;
       }
 
-      const reminder = reminders[0];
-      // Kept for the existing Telegram message template below.
-      reminder.medicineName = reminder.medicine_name;
-      reminder.scheduledTime = reminder.scheduled_time;
+      const results = await Promise.all(
+        reminders.map((dueReminder) =>
+          sendReminderPush(dueReminder)
+        )
+      );
 
-      // Push is sent by the server because an installed iPhone PWA may be
-      // closed when the medicine is due.
-      const results = await Promise.all(reminders.map((dueReminder) => sendReminderPush(dueReminder)));
       console.log('Reminder push results:', results);
-
-      const message = `⏰ Đã đến giờ uống thuốc
-
-${reminder.medicineName}
-Liều: ${reminder.dosage || '1'} ${reminder.unit || 'viên'}
-Thời gian: ${reminder.scheduledTime}`;
-
-      await sendTelegramMessage(message);
 
     } catch (error) {
       console.error('Scheduler error:', error);
@@ -42,4 +29,16 @@ Thời gian: ${reminder.scheduledTime}`;
 
   run();
   setInterval(run, 60 * 1000);
+}
+
+function formatVietnamTime(date) {
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).format(new Date(date));
 }

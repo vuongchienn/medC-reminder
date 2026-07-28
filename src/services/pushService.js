@@ -49,7 +49,7 @@ export async function sendReminderPush(reminder) {
 
   const payload = JSON.stringify({
     title: 'Nhắc uống thuốc',
-    body: `${reminder.medicine_name} · ${reminder.dosage || '1'} ${reminder.unit || 'viên'} · ${reminder.scheduled_time}`,
+    body: `💊 ${reminder.medicine_name} · ${reminder.dosage || '1'} ${reminder.unit || 'viên'} · ${scheduledTimeVN}`,
     url: '/'
   });
 
@@ -104,3 +104,9 @@ export async function sendTestPush() {
   }));
   return { sent: delivered > 0, delivered, subscriptions: subscriptions.length };
 }
+
+const scheduledTimeVN = new Intl.DateTimeFormat('vi-VN', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  hour: '2-digit',
+  minute: '2-digit'
+}).format(new Date(reminder.scheduled_time));
