@@ -79,6 +79,13 @@ export async function runMigrations() {
       reminder_id INTEGER PRIMARY KEY REFERENCES reminders(id) ON DELETE CASCADE,
       sent_at TIMESTAMP NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS reminder_notification_events (
+      reminder_id INTEGER NOT NULL REFERENCES reminders(id) ON DELETE CASCADE,
+      stage VARCHAR(20) NOT NULL,
+      sent_at TIMESTAMP NOT NULL,
+      PRIMARY KEY (reminder_id, stage)
+    );
   `);
 
   await db.exec(`
@@ -91,6 +98,7 @@ export async function runMigrations() {
     ALTER TABLE medicines ADD COLUMN IF NOT EXISTS stock_quantity NUMERIC;
     ALTER TABLE medicines ADD COLUMN IF NOT EXISTS low_stock_threshold NUMERIC;
     ALTER TABLE medicines ADD COLUMN IF NOT EXISTS shopping_needed BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE medicines ADD COLUMN IF NOT EXISTS low_stock_alerted_at TIMESTAMP;
   `);
 
   await db.exec(`

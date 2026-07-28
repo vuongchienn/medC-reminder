@@ -407,19 +407,8 @@ document.getElementById('themeSelect').addEventListener('change', (event) => {
   localStorage.setItem('medreminder-accent', event.target.value);
 });
 document.getElementById('enablePushBtn').addEventListener('click', enablePushNotifications);
-const testPushButton = document.createElement('button');
-testPushButton.id = 'testPushBtn';
-testPushButton.className = 'ghost-btn';
-testPushButton.type = 'button';
-testPushButton.textContent = 'Gửi thử thông báo';
-testPushButton.addEventListener('click', testPushNotification);
-document.getElementById('enablePushBtn').insertAdjacentElement('afterend', testPushButton);
-const retryDueButton = document.createElement('button');
-retryDueButton.className = 'ghost-btn';
-retryDueButton.type = 'button';
-retryDueButton.textContent = 'Gửi lại liều đến hạn';
-retryDueButton.addEventListener('click', retryDueNotifications);
-testPushButton.insertAdjacentElement('afterend', retryDueButton);
+
+
 document.getElementById('exportBtn').addEventListener('click', async () => downloadResponse('/api/export/csv', 'history.csv'));
 document.getElementById('backupBtn').addEventListener('click', async () => downloadResponse('/api/backup', 'medreminder-backup.json'));
 async function downloadResponse(endpoint, filename) { const response = await fetch(endpoint); const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url); }
