@@ -31,6 +31,11 @@ export async function saveSubscription(subscription) {
 
 /** Send a background notification for one reminder. It is safe to call repeatedly. */
 export async function sendReminderPush(reminder) {
+  const scheduledTimeVN = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(reminder.scheduled_time));
   if (!configureWebPush()) return { sent: false, reason: 'not-configured' };
 
   const claim = await db.prepare(`
@@ -104,9 +109,3 @@ export async function sendTestPush() {
   }));
   return { sent: delivered > 0, delivered, subscriptions: subscriptions.length };
 }
-
-const scheduledTimeVN = new Intl.DateTimeFormat('vi-VN', {
-  timeZone: 'Asia/Ho_Chi_Minh',
-  hour: '2-digit',
-  minute: '2-digit'
-}).format(new Date(reminder.scheduled_time));
