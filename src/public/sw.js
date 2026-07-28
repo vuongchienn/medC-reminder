@@ -1,5 +1,5 @@
 const CACHE_NAME = 'medreminder-cache-v3';
-const ASSETS = ['/', '/css/styles.css', '/js/app.js', '/manifest.json', '/icons/medreminder-icon.svg'];
+const ASSETS = ['/', '/css/styles.css', '/js/app.js', '/manifest.json', '/icons/medreminder-icon.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
@@ -20,8 +20,8 @@ self.addEventListener('push', (event) => {
   const data = event.data?.json() || {};
   event.waitUntil(self.registration.showNotification(data.title || 'Nhắc uống thuốc', {
     body: data.body || 'Đã đến giờ uống thuốc.',
-    icon: '/icons/medreminder-icon.svg',
-    badge: '/icons/medreminder-icon.svg',
+    icon: '/icons/medreminder-icon.png',
+    badge: '/icons/medreminder-icon.png',
     data: { url: data.url || '/' },
     tag: 'medicine-reminder',
     renotify: true

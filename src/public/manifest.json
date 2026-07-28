@@ -7,7 +7,7 @@
   "theme_color": "#4f46e5",
   "icons": [
     {
-      "src": "/icons/medreminder-icon.svg",
+      "src": "/icons/medreminder-icon.png",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
