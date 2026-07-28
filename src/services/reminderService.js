@@ -63,7 +63,10 @@ export async function ensureRemindersForDate(dateKey) {
       WHERE medicine_id = ? AND enabled = TRUE
     `).all(medicine.id);
     for (const schedule of schedules) {
-      const reminder = await createReminderIfMissing(medicine, `${dateKey} ${schedule.time_of_day}:00`);
+      const reminder = await createReminderIfMissing(
+        medicine,
+        `${dateKey} ${schedule.time_of_day}:00+07:00`
+      );
       if (reminder) created.push(reminder);
     }
   }
@@ -233,29 +236,17 @@ export async function snoozeReminder(reminderId) {
 
 /** Pending doses that are now due in Vietnam time. Used by the free cron endpoint. */
 export async function getDueRemindersForNow() {
-  const { dateKey, time } = vietnamDateParts();
-  await ensureRemindersForDate(dateKey);
-  // PostgreSQL serializes TIMESTAMP values as JavaScript Date objects. Comparing
-  // them to wall-clock strings in SQL can shift the cutoff by the server's UTC
-  // offset. First fetch exactly the same today rows used by the schedule UI,
-  // then compare their wall-clock values in JavaScript.
-  const reminders = await db.prepare(`
-    SELECT r.*, m.name AS medicine_name, m.dosage, m.unit
+  return await db.prepare(`
+    SELECT
+      r.*,
+      m.name AS medicine_name,
+      m.dosage,
+      m.unit
     FROM reminders r
-    JOIN medicines m ON m.id = r.medicine_id
-    WHERE r.scheduled_time >= ?
-      AND r.scheduled_time < ?
+    JOIN medicines m
+      ON m.id = r.medicine_id
+    WHERE r.status = 'pending'
+      AND r.scheduled_time <= NOW()
     ORDER BY r.scheduled_time ASC
-  `).all(`${dateKey} 00:00:00`, `${dateKey} 23:59:59.999`);
-
-  const cutoff = `${dateKey} ${time}:59`;
-  return reminders.filter((reminder) => {
-    const value = reminder.scheduled_time instanceof Date
-      ? reminder.scheduled_time.toISOString()
-      : String(reminder.scheduled_time);
-    const match = value.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
-    if (!match) return false;
-    const wallClock = `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${match[6]}`;
-    return reminder.status === 'pending' && wallClock <= cutoff;
-  });
+  `).all();
 }

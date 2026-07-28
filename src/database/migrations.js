@@ -29,7 +29,7 @@ export async function runMigrations() {
     CREATE TABLE IF NOT EXISTS reminders (
       id SERIAL PRIMARY KEY,
       medicine_id INTEGER NOT NULL REFERENCES medicines(id) ON DELETE CASCADE,
-      scheduled_time TIMESTAMP NOT NULL,
+      scheduled_time TIMESTAMPTZ NOT NULL,
       status VARCHAR(20) NOT NULL DEFAULT 'pending',
       actual_taken_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -40,8 +40,8 @@ export async function runMigrations() {
       id SERIAL PRIMARY KEY,
       medicine_id INTEGER NOT NULL REFERENCES medicines(id) ON DELETE CASCADE,
       medicine_name VARCHAR(255) NOT NULL,
-      scheduled_time TIMESTAMP NOT NULL,
-      actual_taken_at TIMESTAMP,
+      scheduled_time TIMESTAMPTZ NOT NULL,
+      actual_taken_at TIMESTAMPTZ,
       status VARCHAR(20) NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
