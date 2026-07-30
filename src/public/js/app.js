@@ -425,7 +425,7 @@ document.documentElement.dataset.accent = savedAccent;
 document.getElementById('themeSelect').value = savedAccent;
 updateLiveClock();
 setInterval(updateLiveClock, 1000);
-loadData();
+
 
 pageTitles.reports = 'Báo cáo';
 let authMode = 'login';
@@ -451,12 +451,12 @@ async function initializeAuth() {
     const response = await fetch('/api/auth/me');
     if (!response.ok) throw new Error('not signed in');
     state.user = (await response.json()).user;
+    await loadData();   // thêm dòng này
   } catch {
     setAuthMode('login');
     document.getElementById('authDialog').showModal();
   }
 }
-
 document.getElementById('toggleAuthBtn').addEventListener('click', () => setAuthMode(authMode === 'login' ? 'signup' : 'login'));
 document.getElementById('authForm').addEventListener('submit', async (event) => {
   event.preventDefault();

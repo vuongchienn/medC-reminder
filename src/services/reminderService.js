@@ -109,7 +109,7 @@ export async function generateRemindersForNow() {
         continue;
       }
 
-      const reminder = await createReminderIfMissing(medicine, `${dateKey} ${currentTime}:00`);
+      const reminder = await createReminderIfMissing(medicine, `${dateKey} ${currentTime}:00+07:00`);
       if (reminder) reminders.push(reminder);
     }
   }
