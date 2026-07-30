@@ -53,3 +53,8 @@ dialog { padding: 0; border: 1px solid var(--border); border-radius: 16px; backg
 @media (min-width: 721px) { .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 .auth-dialog { width: min(92vw, 420px); }.dialog-form label[hidden] { display: none !important; }.auth-error { color: #dc2626; min-height: 1.2em; }#adherenceChart { width: 100%; max-width: 100%; margin-top: 18px; background: color-mix(in srgb, var(--primary) 4%, var(--card)); border-radius: 10px; } .extra-dose-actions { margin-left: 8px; } @media print { .sidebar, .topbar, .site-footer, #logoutBtn, .toast { display: none !important; } .main-area { width: 100%; padding: 0; } .view-section { display: none !important; } #reports { display: block !important; } .card { box-shadow: none; } }
+input,
+textarea,
+select {
+  font-size: 16px;
+}
