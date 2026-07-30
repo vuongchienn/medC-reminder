@@ -6,6 +6,11 @@ import pg from 'pg';
 
 dotenv.config();
 
+// DATE (OID 1082): giữ nguyên dạng chuỗi "YYYY-MM-DD" thay vì để pg tự
+// convert thành JS Date object (gây lệch ngày / NaN khi code xử lý bằng string,
+// ví dụ isMedicineOnCycle trong reminderService.js).
+pg.types.setTypeParser(1082, (value) => value);
+
 const { Pool } = pg;
 
 function getPostgresConfig() {

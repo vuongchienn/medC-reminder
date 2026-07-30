@@ -53,8 +53,15 @@ async function getActiveMedicinesForDate(dateKey) {
   `).all(dateKey, dateKey);
 }
 
+function toDateKey(value) {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  return String(value).slice(0, 10);
+}
+
 function isMedicineOnCycle(medicine, dateKey) {
-  const start = new Date(`${String(medicine.start_date).slice(0, 10)}T00:00:00Z`);
+  const start = new Date(`${toDateKey(medicine.start_date)}T00:00:00Z`);
   const date = new Date(`${dateKey}T00:00:00Z`);
   const day = Math.floor((date - start) / 86400_000);
   const taking = Math.max(1, Number(medicine.cycle_days) || 1);
