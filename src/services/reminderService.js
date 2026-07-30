@@ -147,7 +147,7 @@ export async function getReminders(filters = {}, userId) {
   if (!filters.all) {
     const { dateKey } = vietnamDateParts();
     query += ` AND r.scheduled_time >= ? AND r.scheduled_time < ?`;
-    params.push(`${dateKey} 00:00:00`, `${dateKey} 23:59:59.999`);
+    params.push(`${dateKey} 00:00:00+07:00`, `${dateKey} 23:59:59.999+07:00`);
   }
 
   query += ` ORDER BY r.scheduled_time ASC`;

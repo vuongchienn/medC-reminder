@@ -1,27 +1,22 @@
-import { getDueRemindersForNow } from '../services/reminderService.js';
+import { getDueRemindersForNow, ensureRemindersForDate, vietnamDateParts } from '../services/reminderService.js';
 import { sendReminderPush } from '../services/pushService.js';
 
 /**
  * Poll due doses every minute. The calendar may have created the dose ahead
  * of time, so creating a reminder is not used as the notification trigger.
  */
+
 export function startScheduler() {
   const run = async () => {
     try {
+      const { dateKey } = vietnamDateParts();
+      await ensureRemindersForDate(dateKey);
+
       const reminders = await getDueRemindersForNow();
+      if (!reminders.length) return;
 
-      if (!reminders.length) {
-        return;
-      }
-
-      const results = await Promise.all(
-        reminders.map((dueReminder) =>
-          sendReminderPush(dueReminder)
-        )
-      );
-
+      const results = await Promise.all(reminders.map((r) => sendReminderPush(r)));
       console.log('Reminder push results:', results);
-
     } catch (error) {
       console.error('Scheduler error:', error);
     }
