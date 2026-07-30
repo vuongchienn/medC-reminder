@@ -15,10 +15,16 @@ const scheduleText = (medicine) => (medicine.schedules || []).map((item) => item
 // reinterpret PostgreSQL's ISO serialisation as UTC.
 function formatScheduledTime(value, withDate = false) {
   if (!value) return '—';
-  const match = String(value).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
-  if (!match) return String(value);
-  const [, year, month, day, hour, minute] = match;
-  return withDate ? `${day}/${month}/${year} · ${hour}:${minute}` : `${hour}:${minute}`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: VIETNAM_TIME_ZONE,
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(date).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+  return withDate
+    ? `${parts.day}/${parts.month}/${parts.year} · ${parts.hour}:${parts.minute}`
+    : `${parts.hour}:${parts.minute}`;
 }
 
 function formatVietnamInstant(value) {

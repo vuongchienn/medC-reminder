@@ -253,7 +253,7 @@ export async function snoozeReminder(reminderId, userId) {
     throw new Error('Invalid scheduled reminder time');
   }
   original.setUTCMinutes(original.getUTCMinutes() + 10);
-  const scheduledTime = original.toISOString().slice(0, 19).replace('T', ' ');
+  const scheduledTime = original.toISOString(); // "2026-07-30T10:40:00.000Z" — giữ nguyên, có hậu tố Z
   const now = new Date().toISOString();
 
   await db.prepare(`
