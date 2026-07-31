@@ -32,3 +32,37 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(clients.openWindow(event.notification.data?.url || '/'));
 });
+
+
+self.addEventListener('push', (event) => {
+  const data = event.data.json();
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      data: { reminderId: data.reminderId, url: data.url },
+      actions: data.actions || []
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const { reminderId } = event.notification.data;
+
+  if (event.action === 'taken' || event.action === 'skip') {
+    const endpoint = event.action === 'taken'
+      ? `/api/reminders/${reminderId}/taken`
+      : `/api/reminders/${reminderId}/skip`;
+
+    event.waitUntil(
+      fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include' // gửi kèm cookie/session để xác thực user
+      }).catch((err) => console.error('Notification action failed:', err))
+    );
+    return;
+  }
+
+  // Nhấn vào phần thân thông báo (không phải nút) → mở app như bình thường
+  event.waitUntil(clients.openWindow(event.notification.data.url || '/'));
+});

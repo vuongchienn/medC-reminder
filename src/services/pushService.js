@@ -53,10 +53,15 @@ export async function sendReminderPush(reminder) {
   reminder.medicine_name ??= reminder.medicineName;
   reminder.scheduled_time ??= reminder.scheduledTime;
 
-  let payload = JSON.stringify({
+  payload = JSON.stringify({
     title: 'Nhắc uống thuốc',
     body: `💊 ${reminder.medicine_name} · ${reminder.dosage || '1'} ${reminder.unit || 'viên'} · ${scheduledTimeVN}`,
-    url: '/'
+    url: '/',
+    reminderId: reminder.id,          // để service worker biết uống thuốc nào
+    actions: [
+      { action: 'taken', title: '✅ Đã uống' },
+      { action: 'skip', title: '⏭️ Bỏ qua' }
+    ]
   });
 
   if (stage !== 'due') {
