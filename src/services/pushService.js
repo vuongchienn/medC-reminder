@@ -57,10 +57,11 @@ export async function sendReminderPush(reminder) {
     title: 'Nhắc uống thuốc',
     body: `💊 ${reminder.medicine_name} · ${reminder.dosage || '1'} ${reminder.unit || 'viên'} · ${scheduledTimeVN}`,
     url: '/',
-    reminderId: reminder.id,          // để service worker biết uống thuốc nào
+    reminderId: reminder.id,
     actions: [
       { action: 'taken', title: '✅ Đã uống' },
-      { action: 'skip', title: '⏭️ Bỏ qua' }
+      { action: 'snooze', title: '⏰ Nhắc lại 10p' }
+      // { action: 'skip', title: '⏭️ Bỏ qua' } // thêm nếu muốn thử 3 nút
     ]
   });
 

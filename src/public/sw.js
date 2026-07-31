@@ -49,20 +49,22 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const { reminderId } = event.notification.data;
 
-  if (event.action === 'taken' || event.action === 'skip') {
-    const endpoint = event.action === 'taken'
-      ? `/api/reminders/${reminderId}/taken`
-      : `/api/reminders/${reminderId}/skip`;
+  const routes = {
+    taken: `/api/reminders/${reminderId}/taken`,
+    snooze: `/api/reminders/${reminderId}/snooze`,
+    skip: `/api/reminders/${reminderId}/skip`
+  };
 
+  if (routes[event.action]) {
     event.waitUntil(
-      fetch(endpoint, {
+      fetch(routes[event.action], {
         method: 'POST',
-        credentials: 'include' // gửi kèm cookie/session để xác thực user
+        credentials: 'include'
       }).catch((err) => console.error('Notification action failed:', err))
     );
     return;
   }
 
-  // Nhấn vào phần thân thông báo (không phải nút) → mở app như bình thường
+  // Nhấn vào phần thân thông báo → mở app
   event.waitUntil(clients.openWindow(event.notification.data.url || '/'));
 });
