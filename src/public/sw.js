@@ -22,32 +22,16 @@ self.addEventListener('push', (event) => {
     body: data.body || 'Đã đến giờ uống thuốc.',
     icon: '/icons/medreminder-icon.png',
     badge: '/icons/medreminder-icon.png',
-    data: { url: data.url || '/' },
     tag: 'medicine-reminder',
-    renotify: true
+    renotify: true,
+    data: { reminderId: data.reminderId, url: data.url || '/' },
+    actions: data.actions || []
   }));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(clients.openWindow(event.notification.data?.url || '/'));
-});
-
-
-self.addEventListener('push', (event) => {
-  const data = event.data.json();
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      data: { reminderId: data.reminderId, url: data.url },
-      actions: data.actions || []
-    })
-  );
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const { reminderId } = event.notification.data;
+  const { reminderId, url } = event.notification.data || {};
 
   const routes = {
     taken: `/api/reminders/${reminderId}/taken`,
@@ -57,14 +41,11 @@ self.addEventListener('notificationclick', (event) => {
 
   if (routes[event.action]) {
     event.waitUntil(
-      fetch(routes[event.action], {
-        method: 'POST',
-        credentials: 'include'
-      }).catch((err) => console.error('Notification action failed:', err))
+      fetch(routes[event.action], { method: 'POST', credentials: 'include' })
+        .catch((err) => console.error('Notification action failed:', err))
     );
     return;
   }
 
-  // Nhấn vào phần thân thông báo → mở app
-  event.waitUntil(clients.openWindow(event.notification.data.url || '/'));
+  event.waitUntil(clients.openWindow(url || '/'));
 });

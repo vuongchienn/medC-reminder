@@ -53,7 +53,7 @@ export async function sendReminderPush(reminder) {
   reminder.medicine_name ??= reminder.medicineName;
   reminder.scheduled_time ??= reminder.scheduledTime;
 
-  payload = JSON.stringify({
+  let payload = JSON.stringify({
     title: 'Nhắc uống thuốc',
     body: `💊 ${reminder.medicine_name} · ${reminder.dosage || '1'} ${reminder.unit || 'viên'} · ${scheduledTimeVN}`,
     url: '/',
@@ -61,7 +61,6 @@ export async function sendReminderPush(reminder) {
     actions: [
       { action: 'taken', title: '✅ Đã uống' },
       { action: 'snooze', title: '⏰ Nhắc lại 10p' }
-      // { action: 'skip', title: '⏭️ Bỏ qua' } // thêm nếu muốn thử 3 nút
     ]
   });
 
@@ -71,7 +70,12 @@ export async function sendReminderPush(reminder) {
       body: stage === 'late'
         ? `⚠️ Liều trễ: ${reminder.medicine_name}. Hãy xác nhận đã uống hoặc bỏ qua liều này.`
         : `⏰ Nhắc lại: ${reminder.medicine_name} vẫn chưa được xác nhận.`,
-      url: '/'
+      url: '/',
+      reminderId: reminder.id,      // 👈 thêm luôn để nút vẫn hiện ở follow_up/late
+      actions: [
+        { action: 'taken', title: '✅ Đã uống' },
+        { action: 'snooze', title: '⏰ Nhắc lại 10p' }
+      ]
     });
   }
   let delivered = 0;
