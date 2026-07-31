@@ -12,14 +12,7 @@ import {
   snoozeReminder,
   skipReminder,
   undoReminder,
-  deleteReminder      // thêm dòng này
-} from '../services/reminderService.js';
-import {
-  getReminders,
-  markReminderTaken,
-  snoozeReminder,
-  skipReminder,
-  undoReminder
+  deleteReminder  
 } from '../services/reminderService.js';
 import { getDueRemindersForNow } from '../services/reminderService.js';
 import { getPublicKey, saveSubscription, sendReminderPush, sendTestPush } from '../services/pushService.js';
