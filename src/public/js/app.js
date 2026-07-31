@@ -255,8 +255,13 @@ function openView(view) {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebarBackdrop').classList.remove('visible');
   document.getElementById('menuToggle').setAttribute('aria-expanded', 'false');
-}
 
+  // Canvas chỉ có kích thước đúng khi section đang hiển thị (display:block),
+  // nên phải vẽ lại sau khi lớp active được gắn vào DOM.
+  if (view === 'reports') {
+    requestAnimationFrame(renderReports);
+  }
+}
 function openMedicineDialog(medicine = null) {
   const form = document.getElementById('medicineForm');
   form.reset();
@@ -497,9 +502,34 @@ function enhanceReminderActions() {
     const card = document.querySelector(`.reminder-card[data-reminder-id="${reminder.id}"]`); if (!card) return;
     const actions = card.querySelector('.dialog-actions'); if (!actions || actions.querySelector('.extra-dose-actions')) return;
     const extra = document.createElement('span'); extra.className = 'extra-dose-actions';
-    if (reminder.status === 'pending') extra.innerHTML = `<button class="ghost-btn" data-extra="skip">Bỏ qua</button>`;
-    else extra.innerHTML = `<button class="ghost-btn" data-extra="undo">Hoàn tác</button>`;
-    extra.querySelector('button').addEventListener('click', async (event) => { event.stopPropagation(); const action = event.currentTarget.dataset.extra; const reason = action === 'skip' ? window.prompt('Lý do bỏ qua liều này?') : null; if (action === 'skip' && reason === null) return; await fetch(`/api/reminders/${reminder.id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) }); await loadData(); }); actions.append(extra);
+    if (reminder.status === 'pending') extra.innerHTML = `<button class="ghost-btn" data-extra="skip">Bỏ qua</button><button class="ghost-btn danger-btn" data-extra="delete">Xóa</button>`;
+    else extra.innerHTML = `<button class="ghost-btn" data-extra="undo">Hoàn tác</button><button class="ghost-btn danger-btn" data-extra="delete">Xóa</button>`;
+    extra.querySelectorAll('button').forEach((button) => {
+      button.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const action = event.currentTarget.dataset.extra;
+        if (action === 'delete') {
+          if (!window.confirm('Xóa dòng nhắc nhở này? Hành động không thể hoàn tác.')) return;
+          beginLoading('Đang xóa...');
+          try {
+            await requireSuccess(await fetch(`/api/reminders/${reminder.id}`, { method: 'DELETE' }));
+            await loadData();
+            showToast('Đã xóa dòng nhắc nhở.');
+          } catch (error) {
+            console.error(error);
+            showToast(error.message || 'Không thể xóa.', 'error');
+          } finally {
+            endLoading();
+          }
+          return;
+        }
+        const reason = action === 'skip' ? window.prompt('Lý do bỏ qua liều này?') : null;
+        if (action === 'skip' && reason === null) return;
+        await fetch(`/api/reminders/${reminder.id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
+        await loadData();
+      });
+    });
+    actions.append(extra);
   });
 }
 

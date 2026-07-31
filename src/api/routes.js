@@ -6,7 +6,14 @@ import {
   updateMedicine,
   deleteMedicine
 } from '../services/medicineService.js';
-
+import {
+  getReminders,
+  markReminderTaken,
+  snoozeReminder,
+  skipReminder,
+  undoReminder,
+  deleteReminder      // thêm dòng này
+} from '../services/reminderService.js';
 import {
   getReminders,
   markReminderTaken,
@@ -262,5 +269,9 @@ router.post('/api/settings', async (req, res) => {
     darkMode
   });
 });
-
+router.delete('/api/reminders/:id', async (req, res) => {
+  const result = await deleteReminder(Number(req.params.id), req.user.id);
+  if (!result) return res.status(404).json({ error: 'Reminder not found' });
+  res.json(result);
+});
 export default router;

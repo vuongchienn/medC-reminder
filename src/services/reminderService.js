@@ -307,3 +307,29 @@ export async function getDueRemindersForNow(userId = null) {
   query += ' ORDER BY r.scheduled_time ASC';
   return await db.prepare(query).all(...params);
 }
+
+/**
+ * Delete a single reminder row (and its matching history entry).
+ * reminder_notification_events tự động bị xóa theo (FK ON DELETE CASCADE).
+ */
+export async function deleteReminder(reminderId, userId) {
+  const reminder = await db.prepare(`
+    SELECT r.* FROM reminders r JOIN medicines m ON m.id = r.medicine_id
+    WHERE r.id = ? AND m.user_id = ?
+  `).get(reminderId, userId);
+
+  if (!reminder) {
+    return null;
+  }
+
+  await db.prepare(`
+    DELETE FROM reminder_history
+    WHERE medicine_id = ? AND scheduled_time = ?
+  `).run(reminder.medicine_id, reminder.scheduled_time);
+
+  await db.prepare(`
+    DELETE FROM reminders WHERE id = ?
+  `).run(reminderId);
+
+  return { id: reminderId, deleted: true };
+}
