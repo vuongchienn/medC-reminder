@@ -236,6 +236,9 @@ export async function undoReminder(reminderId, userId) {
 /**
  * Snooze reminder for 10 minutes.
  */
+/**
+ * Snooze reminder for 10 minutes.
+ */
 export async function snoozeReminder(reminderId, userId) {
   const reminder = await db.prepare(`
     SELECT r.* FROM reminders r JOIN medicines m ON m.id = r.medicine_id
@@ -246,21 +249,20 @@ export async function snoozeReminder(reminderId, userId) {
     return null;
   }
 
-  // scheduled_time is a Vietnam wall-clock timestamp. PostgreSQL returns it as
-  // a Date, so use its ISO fields as wall-clock fields and add ten minutes there.
-  const original = new Date(reminder.scheduled_time);
-  if (Number.isNaN(original.getTime())) {
-    throw new Error('Invalid scheduled reminder time');
-  }
-  original.setUTCMinutes(original.getUTCMinutes() + 10);
-  const scheduledTime = original.toISOString(); // "2026-07-30T10:40:00.000Z" — giữ nguyên, có hậu tố Z
-  const now = new Date().toISOString();
+  // Snooze là "nhắc lại sau 10 phút kể từ bây giờ", không phải cộng thêm
+  // 10 phút vào giờ đã lên lịch cũ (nếu không, khi liều đã trễ, giờ mới
+  // vẫn có thể nằm trong quá khứ và bị coi là "đến hạn" ngay lập tức).
+  const previousScheduledTime = reminder.scheduled_time;
+  const now = new Date();
+  const nextTime = new Date(now.getTime() + 10 * 60 * 1000);
+  const scheduledTime = nextTime.toISOString();
+  const nowIso = now.toISOString();
 
   await db.prepare(`
     UPDATE reminders
     SET scheduled_time = ?, updated_at = ?
     WHERE id = ?
-  `).run(scheduledTime, now, reminderId);
+  `).run(scheduledTime, nowIso, reminderId);
 
   await db.prepare(`
     UPDATE reminder_history
@@ -270,7 +272,14 @@ export async function snoozeReminder(reminderId, userId) {
       WHERE medicine_id = ? AND scheduled_time = ?
       ORDER BY id DESC LIMIT 1
     )
-  `).run(scheduledTime, reminder.medicine_id, reminder.scheduled_time);
+  `).run(scheduledTime, reminder.medicine_id, previousScheduledTime);
+
+  // Xoá các mốc thông báo (due/follow_up/late) đã ghi cho bản ghi này,
+  // để lần đến hạn mới sau khi snooze vẫn được gửi push bình thường
+  // thay vì bị coi là "đã gửi rồi" và bỏ qua.
+  await db.prepare(`
+    DELETE FROM reminder_notification_events WHERE reminder_id = ?
+  `).run(reminderId);
 
   return {
     id: reminderId,
